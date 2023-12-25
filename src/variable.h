@@ -249,3 +249,9 @@ char **target_environment (struct file *file, int recursive);
 
 struct pattern_var *create_pattern_var (const char *target,
                                         const char *suffix);
+
+
+extern struct variable_set global_variable_set;
+extern struct variable_set_list global_setlist;
+extern struct variable_set_list *current_variable_set_list;
+extern struct pattern_var *pattern_vars;

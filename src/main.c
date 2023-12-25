@@ -93,9 +93,11 @@ double atof ();
 #include "getopt.h"
 #include "shuffle.h"
 #include "warning.h"
+#include "jprint.h"
 
 static void clean_jobserver (int status);
 static void print_data_base (void);
+static void print_data_base_json (void);
 static void print_version (void);
 static void decode_switches (int argc, const char **argv,
                              enum variable_origin origin);
@@ -176,6 +178,10 @@ int print_data_base_flag = 0;
    by reading the makefile (--print-targets).  */
 
 int print_targets_flag = 0;
+/* Nonzero means don't remake anything, just print the data base
+   that results from reading the makefile in json form (-P).  */
+
+int print_data_base_json_flag = 0;
 
 /* Nonzero means don't remake anything; just return a nonzero status
    if the specified targets are not up to date (-q).  */
@@ -377,6 +383,8 @@ static const char *const usage[] =
                               Synchronize output of parallel jobs by TYPE.\n"),
     N_("\
   -p, --print-data-base       Print make's internal database.\n"),
+      N_("\
+  -P, --print-data-base-json  Print make's internal database in a json format\n"),
     N_("\
   -q, --question              Run no recipe; exit status says if up to date.\n"),
     N_("\
@@ -471,6 +479,7 @@ static struct command_switch switches[] =
     { 'm', ignore, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
     { 'n', flag, &just_print_flag, 1, 1, 1, 0, 0, 0, "just-print", 0 },
     { 'p', flag, &print_data_base_flag, 1, 1, 0, 0, 0, 0, "print-data-base", 0 },
+    { 'P', flag, &print_data_base_json_flag, 1, 1, 0, 0, 0, 0, "print-data-base-json", 0 },
     { 'q', flag, &question_flag, 1, 1, 1, 0, 0, 0, "question", 0 },
     { 'r', flag, &no_builtin_rules_flag, 1, 1, 0, 0, 0, 0, "no-builtin-rules", 0 },
     { 'R', flag, &no_builtin_variables_flag, 1, 1, 0, 0, 0, 0,
@@ -2573,7 +2582,11 @@ main (int argc, char **argv, char **envp)
           remove_intermediates (0);
 
           if (print_data_base_flag)
+          {
             print_data_base ();
+          } else if (print_data_base_json_flag) {
+            print_data_base_json ();
+          }
 
           clean_jobserver (0);
 
@@ -3794,6 +3807,34 @@ print_data_base (void)
   printf (_("\n# Finished Make data base on %s\n\n"), buf);
 }
 
+/* Print a bunch of information about this and that in JSON format  */
+
+static void
+print_data_base_json (void)
+{
+  int resolution;
+  char buf[FILE_TIMESTAMP_PRINT_LEN_BOUND + 1];
+  struct variable *v = NULL;
+  file_timestamp_sprintf (buf, file_timestamp_now (&resolution));
+
+  /* print_version (); */
+
+  /* printf (_("\n# Make data base, printed on %s\n"), buf); */
+  
+  v = lookup_variable (STRING_SIZE_TUPLE ("MAKEFILE_LIST"));
+  printf("\"%s\" :{\n", v->value);
+  jprint_variable_data_base ();
+  jprint_dir_data_base ();
+  jprint_rule_data_base ();
+  jprint_file_data_base ();
+  jprint_vpath_data_base ();
+  jstrcache_print_stats ("#");
+  printf("},\n");
+
+  /* file_timestamp_sprintf (buf, file_timestamp_now (&resolution));
+  printf (_("\n# Finished Make data base on %s\n\n"), buf); */
+}
+
 static void
 clean_jobserver (int status)
 {
@@ -3863,6 +3904,13 @@ die (int status)
 
       if (print_data_base_flag)
         print_data_base ();
+      else if (print_data_base_json_flag) {
+	char jsonfilename[GET_PATH_MAX];
+	printf("Writing database to json file");
+	snprintf(jsonfilename, GET_PATH_MAX-1, "makefile-%d.json", (int)getpid());
+        json_file = fopen(jsonfilename, "w");
+        print_data_base_json();
+      }
 
       if (verify_flag)
         verify_file_data_base ();

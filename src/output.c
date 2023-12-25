@@ -83,7 +83,7 @@ log_working_directory (int entering)
   const char *fmt;
   char *p;
 
-  /* Get enough space for the longest possible output.  */
+  /* Get enough space for theV longest possible output.  */
   need = strlen (program) + INTSTR_LENGTH + 2 + 1;
   if (starting_directory)
     need += strlen (starting_directory);
@@ -141,6 +141,15 @@ log_working_directory (int entering)
 
   return 1;
 }
+
+
+static int
+jlog_working_directory (int entering)
+{
+  /* any logging tends to create output sync issues */
+  return 1+entering-entering;
+}
+
 
 
 #ifndef NO_OUTPUT_SYNC
@@ -286,16 +295,26 @@ output_dump (struct output *out)
 
       /* Log the working directory for this dump.  */
 
-      if (output_sync != OUTPUT_SYNC_RECURSE && should_print_dir ())
-        traced = log_working_directory (1);
+      if (output_sync != OUTPUT_SYNC_RECURSE && should_print_dir ()) {
+        if (print_data_base_json_flag) {
+          traced = jlog_working_directory (1);
+	} else {
+          traced = log_working_directory (1);
+	}
+      }
 
       if (outfd_not_empty)
         pump_from_tmp (out->out, stdout);
       if (errfd_not_empty && out->err != out->out)
         pump_from_tmp (out->err, stderr);
 
-      if (traced)
-        log_working_directory (0);
+      if (traced) {
+        if (print_data_base_json_flag) {
+          jlog_working_directory (0);
+	} else {
+          log_working_directory (0);
+	}
+      }
 
       /* Exit the critical section.  */
       osync_release ();
@@ -342,8 +361,13 @@ output_close (struct output *out)
 {
   if (! out)
     {
-      if (stdio_traced)
-        log_working_directory (0);
+      if (stdio_traced) {
+        if (print_data_base_json_flag) {
+          jlog_working_directory (0);
+	} else {
+          log_working_directory (0);
+	}
+      }
       fd_reset_append(fileno (stdout), stdout_flags);
       fd_reset_append(fileno (stderr), stderr_flags);
       return;
@@ -375,8 +399,13 @@ output_start (void)
   /* If we're not syncing this output per-line or per-target, make sure we emit
      the "Entering..." message where appropriate.  */
   if (output_sync == OUTPUT_SYNC_NONE || output_sync == OUTPUT_SYNC_RECURSE)
-    if (! stdio_traced && should_print_dir ())
-      stdio_traced = log_working_directory (1);
+    if (! stdio_traced && should_print_dir ()) {
+        if (print_data_base_json_flag) {
+          stdio_traced = jlog_working_directory (1);
+	} else {
+          stdio_traced = log_working_directory (1);
+	}
+    }
 }
 
 void

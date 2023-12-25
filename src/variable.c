@@ -40,7 +40,7 @@ static unsigned long variable_changenum = 0;
 
 /* Chain of all pattern-specific variables.  */
 
-static struct pattern_var *pattern_vars = NULL;
+struct pattern_var *pattern_vars = NULL;
 
 /* Pointer to the last struct in the pack of a specific size, from 1 to 255.*/
 
@@ -177,8 +177,8 @@ variable_hash_cmp (const void *xv, const void *yv)
 #define SMALL_SCOPE_VARIABLE_BUCKETS    13
 #endif
 
-static struct variable_set global_variable_set;
-static struct variable_set_list global_setlist
+struct variable_set global_variable_set;
+struct variable_set_list global_setlist
   = { 0, &global_variable_set, 0 };
 struct variable_set_list *current_variable_set_list = &global_setlist;
 
@@ -2111,6 +2111,7 @@ print_target_variables (const struct file *file)
       hash_map_arg (&file->variables->set->table, print_noauto_variable, t);
     }
 }
+
 
 #if MK_OS_W32
 void
