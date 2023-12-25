@@ -650,6 +650,19 @@ void show_goal_error (void);
 
 /* String caching  */
 void strcache_init (void);
+int strcache_get_stats (
+      unsigned long *numbuffs, 
+      unsigned long *fullbuffs, 
+      unsigned long *totfree,
+      unsigned long *maxfree,
+      unsigned long *minfree,
+      unsigned long *total_strings_,
+      unsigned long *total_size_,
+      unsigned long *end,
+      unsigned long *count,
+      unsigned long *bufsize,
+      unsigned long *total_adds
+      );
 void strcache_print_stats (const char *prefix);
 int strcache_iscached (const char *str);
 const char *strcache_add (const char *str);
@@ -725,7 +738,7 @@ extern const floc **expanding_var;
 extern unsigned short stopchar_map[];
 
 extern int just_print_flag, run_silent, ignore_errors_flag, keep_going_flag;
-extern int print_data_base_flag, question_flag, touch_flag, always_make_flag;
+extern int print_data_base_flag, print_data_base_json_flag, question_flag, touch_flag, always_make_flag;
 extern int env_overrides, no_builtin_rules_flag, no_builtin_variables_flag;
 extern int print_version_flag, check_symlink_flag, posix_pedantic;
 extern int not_parallel, second_expansion, clock_skew_detected;

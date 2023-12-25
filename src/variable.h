@@ -14,6 +14,9 @@ A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
+#ifndef _VARIABLE_H_
+#define _VARIABLE_H_
+
 #include "hash.h"
 
 struct file;
@@ -249,3 +252,11 @@ char **target_environment (struct file *file, int recursive);
 
 struct pattern_var *create_pattern_var (const char *target,
                                         const char *suffix);
+
+
+extern struct variable_set global_variable_set;
+extern struct variable_set_list global_setlist;
+extern struct variable_set_list *current_variable_set_list;
+extern struct pattern_var *pattern_vars;
+
+#endif

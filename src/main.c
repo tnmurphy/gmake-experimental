@@ -17,6 +17,7 @@ this program.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "makeint.h"
 
 #include <assert.h>
+#include <unistd.h>
 #if MK_OS_W32
 # include <windows.h>
 # include <io.h>
@@ -93,9 +94,11 @@ double atof ();
 #include "shuffle.h"
 #include "variable.h"
 #include "warning.h"
+#include "jprint.h"
 
 static void clean_jobserver (int status);
 static void print_data_base (void);
+static void print_data_base_json (void);
 static void print_version (void);
 static void decode_switches (int argc, const char **argv,
                              enum variable_origin origin);
@@ -176,6 +179,10 @@ int print_data_base_flag = 0;
    by reading the makefile (--print-targets).  */
 
 int print_targets_flag = 0;
+/* Nonzero means don't remake anything, just print the data base
+   that results from reading the makefile in json form (-P).  */
+
+int print_data_base_json_flag = 0;
 
 /* Nonzero means don't remake anything; just return a nonzero status
    if the specified targets are not up to date (-q).  */
@@ -377,6 +384,8 @@ static const char *const usage[] =
                               Synchronize output of parallel jobs by TYPE.\n"),
     N_("\
   -p, --print-data-base       Print make's internal database.\n"),
+      N_("\
+  -P, --print-data-base-json  Print make's internal database in a json format\n"),
     N_("\
   -q, --question              Run no recipe; exit status says if up to date.\n"),
     N_("\
@@ -471,6 +480,7 @@ static struct command_switch switches[] =
     { 'm', ignore, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
     { 'n', flag, &just_print_flag, 1, 1, 1, 0, 0, 0, "just-print", 0 },
     { 'p', flag, &print_data_base_flag, 1, 1, 0, 0, 0, 0, "print-data-base", 0 },
+    { 'P', flag, &print_data_base_json_flag, 1, 1, 0, 0, 0, 0, "print-data-base-json", 0 },
     { 'q', flag, &question_flag, 1, 1, 1, 0, 0, 0, "question", 0 },
     { 'r', flag, &no_builtin_rules_flag, 1, 1, 0, 0, 0, 0, "no-builtin-rules", 0 },
     { 'R', flag, &no_builtin_variables_flag, 1, 1, 0, 0, 0, 0,
@@ -2573,7 +2583,11 @@ main (int argc, char **argv, char **envp)
           remove_intermediates (0);
 
           if (print_data_base_flag)
+          {
             print_data_base ();
+          } else if (print_data_base_json_flag) {
+            print_data_base_json ();
+          }
 
           clean_jobserver (0);
 
@@ -3794,6 +3808,38 @@ print_data_base (void)
   printf (_("\n# Finished Make data base on %s\n\n"), buf);
 }
 
+/* Print a bunch of information about this and that in JSON format  */
+
+static void
+print_data_base_json (void)
+{
+  int resolution;
+  char buf[FILE_TIMESTAMP_PRINT_LEN_BOUND + 1];
+  struct variable *v = NULL;
+  file_timestamp_sprintf (buf, file_timestamp_now (&resolution));
+
+  /* print_version (); */
+
+  /* printf (_("\n# Make data base, printed on %s\n"), buf); */
+  
+  v = lookup_variable (STRING_SIZE_TUPLE ("MAKEFILE_LIST"));
+  jprintf("{\n\"");
+  if (v) {
+  	print_escaped_string(v->value);
+  }
+  jprintf("\" :{\n");
+  jprint_variable_data_base (0);
+  jprint_dir_data_base (0);
+  jprint_rule_data_base (0);
+  jprint_file_data_base (0);
+  jprint_vpath_data_base (0);
+  jstrcache_print_stats (1);
+  jprintf("}\n}\n");
+
+  /* file_timestamp_sprintf (buf, file_timestamp_now (&resolution));
+  printf (_("\n# Finished Make data base on %s\n\n"), buf); */
+}
+
 static void
 clean_jobserver (int status)
 {
@@ -3863,6 +3909,50 @@ die (int status)
 
       if (print_data_base_flag)
         print_data_base ();
+      else if (print_data_base_json_flag) {
+        char namebuf[GET_PATH_MAX];
+        FILE *json_file;
+        const char *filename_base = (char *)0;
+        const char *indexfilename = (char *)0;
+        char *jsonfilename = (char *)0;
+        char *dirpos = (char *)namebuf;
+        int jflen = 0;
+       
+ 
+        filename_base = getenv ("MAKE_JSON_BASE");
+        if (!filename_base) {
+          filename_base = "makefile";
+        }
+        /* prefix with the CWD if it's not absolute. This is because
+           the index needs to have absolute paths in it to be
+           correct.
+        */
+        if (filename_base[0]  != '/') {
+            jsonfilename = getcwd(namebuf, GET_PATH_MAX);
+            jflen = strlen(jsonfilename);
+            dirpos = jsonfilename + jflen;
+            *dirpos++ = '/';  /*  is this OK? hmm. */
+        } else {
+            jsonfilename = namebuf;
+            jsonfilename[0] = '\0';
+        }
+        if (jsonfilename) {
+          snprintf(dirpos, GET_PATH_MAX-1-jflen, "%s-%d.json", filename_base, (int)getpid());
+          indexfilename = getenv ("MAKE_JSON_INDEX");
+          printf("Writing database to json file: %s\n", jsonfilename);
+          json_file = jopen(jsonfilename);
+          if (json_file) {
+            print_data_base_json();
+            if (indexfilename) {
+                jappend_to_index(indexfilename, jsonfilename);
+            }
+          } else {
+            fprintf(stderr, "file open returned %d", errno);
+   	  }
+        } else {
+            fprintf(stderr, "Unable to fit CWD into buffer - no json output possible.");
+   	}
+      }
 
       if (verify_flag)
         verify_file_data_base ();
