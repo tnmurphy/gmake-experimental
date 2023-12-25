@@ -43,3 +43,4 @@ void print_commands (const struct commands *cmds);
 void delete_child_targets (struct child *child);
 void chop_commands (struct commands *cmds);
 void set_file_variables (struct file *file, const char *stem);
+void jprint_cmds(const char *key, struct commands *cmds, int is_last);

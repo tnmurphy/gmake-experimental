@@ -59,6 +59,11 @@ file_hash_cmp (const void *x, const void *y)
 }
 
 static struct hash_table files;
+struct hash_table *get_files(void)
+{
+    return &files;
+}
+
 
 /* We can't free files we take out of the hash table, because they are still
    likely pointed to in various places.  The check_renamed() will be used if
@@ -1065,6 +1070,7 @@ print_prereqs (const struct dep *deps)
   putchar ('\n');
 }
 
+
 static void
 print_file (const void *item)
 {
@@ -1182,6 +1188,7 @@ print_file (const void *item)
     print_file ((const void *) f->prev);
 }
 
+
 void
 print_file_data_base (void)
 {
@@ -1190,8 +1197,11 @@ print_file_data_base (void)
   hash_map (&files, print_file);
 
   fputs (_("\n# files hash-table stats:\n# "), stdout);
+  
   hash_print_stats (&files, stdout);
 }
+
+
 
 /* Verify the integrity of the data base of files.  */
 
