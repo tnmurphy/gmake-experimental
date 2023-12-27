@@ -27,6 +27,17 @@ this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 FILE *json_file;
 
+typedef struct {
+	int is_first;
+	int indent;
+	char *specific_target;
+} variable_print_state;
+
+typedef struct {
+	int is_first;
+	int indent;
+} file_print_state;
+
 
 void print_escaped_string(const char *input)
 {
@@ -131,6 +142,7 @@ static void jprint_variable (const void *item, void *arg)
 {
   const struct variable *v = item;
   const char *origin;
+  variable_print_state *state = (variable_print_state *)arg;
 
   switch (v->origin)
     {
@@ -159,31 +171,33 @@ static void jprint_variable (const void *item, void *arg)
       abort ();
     }
     
+  if (state) {
+     /* is first variable in a sequence so don't print a preceeding comma */
+    if (state->is_first) {
+      state->is_first = 0;
+    } else {
+      fprintf (json_file, ",\n");
+    }
+  }
   fprintf (json_file, "\"%s\" : {\n", v->name);
   fprintf (json_file, "  \"origin\": \"%s\",\n", origin);
   fprintf (json_file, "  \"private\": %s,\n", v->private_var ? "true" : "false");
   if (v->fileinfo.filenm)
     fprintf (json_file, "  \"source\": \"%s\",\n  \"line\": %lu,\n",
             v->fileinfo.filenm, v->fileinfo.lineno + v->fileinfo.offset);
-  if (arg) {
-	  /* do nothing */
-  }
 
     /* Is this a 'define'?  */
   if (v->recursive && strchr (v->value, '\n') != 0)
     fprintf (json_file, "  \"define\": \"%s\",\n", v->value);
   else
     {
-
       fprintf (json_file, "  \"%s%s\": \"",      
         v->append ? "append" : "assign", 
         v->recursive ? "-recursive" : "");
       print_escaped_string(v->value);
       fprintf (json_file, "\"");
- 
     }
-  fprintf (json_file, "\n},\n");
-    
+     fprintf (json_file, "\n}");
 }
 
 
@@ -208,25 +222,29 @@ static void jprint_noauto_variable (const void *item, void *arg)
 /* Print all the variables in SET.  PREFIX is printed before
    the actual variable definitions (everything else is comments).  */
 
-void jprint_variable_set (const char *key, struct variable_set *set, const char *prefix, int pauto, int is_last)
+void jprint_variable_set (const char *key, struct variable_set *set, int pauto, int is_last)
 {
+  variable_print_state vstate;
+  vstate.is_first = 1;
+  vstate.indent=2;
+
   if (!set) {
       return;
   }
   fprintf (json_file, "  \"%s\": {\n", key);
   hash_map_arg (&set->table, (pauto ? jprint_auto_variable : jprint_variable),
-                (void *)prefix);
-  hash_jprint_stats ("hash-table-stats", &set->table, 1);
+                (void *)&vstate);
+  /* hash_jprint_stats ("hash-table-stats", &set->table, 1); */
   fprintf (json_file, "}%s\n", is_last ? "" : ",");
 }
 
 /* Print the data base of variables.  */
 
-void jprint_variable_data_base (void)
+void jprint_variable_data_base (int is_last)
 {
   fprintf (json_file, "\"variables\": {\n");
 
-  jprint_variable_set ("global", &global_variable_set, "", 0, 0);
+  jprint_variable_set ("global", &global_variable_set, 0, 0);
   
 
   fprintf (json_file, "\"pattern-specific-variables\" : {\n");
@@ -234,18 +252,21 @@ void jprint_variable_data_base (void)
   {
     struct pattern_var *p;
     unsigned int rules = 0;
+    variable_print_state vstate;
+    vstate.is_first = 1;
+    vstate.indent=2;
 
     for (p = pattern_vars; p != 0; p = p->next)
       {
         ++rules;
         fprintf (json_file, "\n\"%s\" :\n", p->target);
-        jprint_variable (&p->variable, (void *)"# ");
+        jprint_variable (&p->variable, (void *)&vstate);
       }
 
     fprintf (json_file, "\n},\n");
     
     fprintf (json_file, "  \"pattern-specific-rule-count\": %u\n", rules);
-    fprintf (json_file, "},");
+    fprintf (json_file, "}%s", is_last ? "" : ",");
   }
 
 }
@@ -254,10 +275,8 @@ void jprint_variable_data_base (void)
 
 void jprint_file_variables (const char *key, const struct file *file, int is_last)
 {
-  fprintf (json_file, "\"%s\": {\n", key);
   if (file->variables != 0)
-    jprint_variable_set ("file-variables", file->variables->set, "# ", 1, 0);
-  fprintf (json_file, "}%s\n", is_last ? "" : ",");
+    jprint_variable_set (key, file->variables->set, 1, is_last);
 }
 
 void jprint_target_variables (const char *key, const struct file *file, int is_last)
@@ -358,89 +377,107 @@ void jprint_cmds(const char *key, struct commands *cmds, int is_last)
 }
 
 
-void jprint_file (const void *item)
+void jprint_file (const void *item, void *arg)
 {
   const struct file *f = item;
+  file_print_state *state = (file_print_state *)arg;
     
-    if (no_builtin_rules_flag && f->builtin)
-      return;
+  if (no_builtin_rules_flag && f->builtin)
+    return;
 
-    fprintf (json_file, "\"%s\" : {\n",f->name);
-    jprint_string("hname", f->hname, 0);
-    jprint_string("vpath", f->vpath, 0);
-    jprint_deps("deps", f->deps, 0);
-    jprint_cmds("cmds", f->cmds, 0);
-    
-    jprint_string("stem", f->stem, 0);
-    jprint_deps("also_make", f->also_make, 0);
-    
-    /* print_pointer("prev", (const void *)f->prev, 0);
-    print_pointer("last", (const void *)f->last, 0);
-     */
-     
-    if (f->renamed) {
-      jprint_string("renamed", f->renamed->name, 0);
+  if (state) {
+    /* is first variable in a sequence so don't print a preceeding comma */
+    if (state->is_first) {
+      state->is_first = 0;
+    } else {
+      fprintf (json_file, ",\n");
     }
-    jprint_file_variables("variables", f, 0);
-    jprint_target_variables("target-variables", f, 0);
-    if (f->pat_variables) {
-      jprint_variable_set("pattern_specific_variables", f->pat_variables->set, "", 0, 0);
-    }
-    if (f->parent) {
-      jprint_string("parent", f->parent->name, 0);
-    }
-    jprint_pointer("double_colon", (const void *)f->double_colon, 0);
-    jprint_unsigned_int("last_mtime", f->last_mtime, 0);
-    jprint_unsigned_int("mtime_before_update", f->mtime_before_update, 0);
-    jprint_unsigned_int("considered", f->considered, 0);
-    fprintf (json_file, "  \"command_flags\": %d,\n", f->command_flags);
-    jprint_enum("update_status", f->update_status, 0);
-    jprint_command_state("command_state", f->command_state, 0);
-    jprint_bool("builtin", f->builtin, 0);
-    jprint_bool("precious", f->precious, 0);
-    jprint_bool("loaded", f->loaded, 0);
-    jprint_bool("unloaded", f->unloaded, 0);
-    jprint_bool("low_resolution_time", f->low_resolution_time, 0);
-    jprint_bool("tried_implicit", f->tried_implicit, 0);
-    jprint_bool("updating", f->updating, 0);
-    jprint_bool("updated", f->updated, 0);
-    jprint_bool("is_target", f->is_target, 0);
-    jprint_bool("cmd_target", f->cmd_target, 0);
-    jprint_bool("phony", f->phony, 0);
-    jprint_bool("intermediate", f->intermediate, 0);
-    jprint_bool("is_explicit", f->is_explicit, 0);
-    jprint_bool("secondary", f->secondary, 0);
-    jprint_bool("notintermediate", f->notintermediate, 0);
-    jprint_bool("dontcare", f->dontcare, 0);
-    jprint_bool("ignore_vpath", f->ignore_vpath, 0);
-    jprint_bool("pat_searched", f->pat_searched, 0);
-    jprint_bool("no_diag", f->no_diag, 0);
-    jprint_bool("was_shuffled", f->was_shuffled, 0);
-    jprint_bool("snapped", f->snapped, 1);
-    fprintf (json_file, "},\n");
+  }
+
+  fprintf (json_file, "\"%s\" : {\n",f->name);
+  jprint_string("hname", f->hname, 0);
+  jprint_string("vpath", f->vpath, 0);
+  jprint_deps("deps", f->deps, 0);
+  jprint_cmds("cmds", f->cmds, 0);
+  
+  jprint_string("stem", f->stem, 0);
+  jprint_deps("also_make", f->also_make, 0);
+  
+  /* print_pointer("prev", (const void *)f->prev, 0);
+  print_pointer("last", (const void *)f->last, 0);
+   */
+   
+  if (f->renamed) {
+    jprint_string("renamed", f->renamed->name, 0);
+  }
+  jprint_file_variables("variables", f, 0);
+  jprint_target_variables("target-variables", f, 0);
+  if (f->pat_variables) {
+    jprint_variable_set("pattern_specific_variables", f->pat_variables->set, 0, 0);
+  }
+  if (f->parent) {
+    jprint_string("parent", f->parent->name, 0);
+  }
+  jprint_pointer("double_colon", (const void *)f->double_colon, 0);
+  jprint_unsigned_int("last_mtime", f->last_mtime, 0);
+  jprint_unsigned_int("mtime_before_update", f->mtime_before_update, 0);
+  jprint_unsigned_int("considered", f->considered, 0);
+  fprintf (json_file, "  \"command_flags\": %d,\n", f->command_flags);
+  jprint_enum("update_status", f->update_status, 0);
+  jprint_command_state("command_state", f->command_state, 0);
+  jprint_bool("builtin", f->builtin, 0);
+  jprint_bool("precious", f->precious, 0);
+  jprint_bool("loaded", f->loaded, 0);
+  jprint_bool("unloaded", f->unloaded, 0);
+  jprint_bool("low_resolution_time", f->low_resolution_time, 0);
+  jprint_bool("tried_implicit", f->tried_implicit, 0);
+  jprint_bool("updating", f->updating, 0);
+  jprint_bool("updated", f->updated, 0);
+  jprint_bool("is_target", f->is_target, 0);
+  jprint_bool("cmd_target", f->cmd_target, 0);
+  jprint_bool("phony", f->phony, 0);
+  jprint_bool("intermediate", f->intermediate, 0);
+  jprint_bool("is_explicit", f->is_explicit, 0);
+  jprint_bool("secondary", f->secondary, 0);
+  jprint_bool("notintermediate", f->notintermediate, 0);
+  jprint_bool("dontcare", f->dontcare, 0);
+  jprint_bool("ignore_vpath", f->ignore_vpath, 0);
+  jprint_bool("pat_searched", f->pat_searched, 0);
+  jprint_bool("no_diag", f->no_diag, 0);
+  jprint_bool("was_shuffled", f->was_shuffled, 0);
+  jprint_bool("snapped", f->snapped, 1);
+  fprintf (json_file, "}\n");
 }
 
 
-void jprint_file_data_base (void)
+void jprint_file_data_base (int is_last)
 {
+  file_print_state fstate;
+  fstate.is_first = 1;
+  fstate.indent = 2;
+
+
   fprintf (json_file, "\n\"files\": {\n");
 
-  hash_map (get_files(), jprint_file);
+  hash_map_arg (get_files(), jprint_file, (void *)&fstate);
 
-  fprintf (json_file, "\n},\n");
-  hash_jprint_stats ("hash-table-stats", get_files(), 0);
+  fprintf (json_file, "\n}%s\n", is_last ? "" : ",");
+  /* hash_jprint_stats ("hash-table-stats", get_files(), 0); */
 }
 
-void jprint_dir_data_base()
+void jprint_dir_data_base(int is_last)
 {
+  fprintf (json_file, "\n\"dirs\": []%s\n", is_last ? "" : ",");
 }
 
-void jprint_rule_data_base()
+void jprint_rule_data_base(int is_last)
 {
+  fprintf (json_file, "\n\"rules\": []%s\n", is_last ? "" : ",");
 }
 
-void jprint_vpath_data_base()
+void jprint_vpath_data_base(int is_last)
 {
+  fprintf (json_file, "\n\"vpath\": []%s\n", is_last ? "" : ",");
 }
 
 void jstrcache_print_stats(const char *)

@@ -20,6 +20,8 @@ struct file;
 struct dep;
 struct commands;
 
+void print_escaped_string(const char *input);
+
 void jprint_bool(const char *key, int value, int is_last);
 void jprint_pointer(const char *key, const void *value, int is_last);
 void jprint_unsigned_int(const char *key, unsigned int value, int is_last);
@@ -28,21 +30,21 @@ void jprint_enum(const char *key, unsigned int value, int is_last);
 
 void jprint_cmds(const char *key, struct commands *cmds, int is_last);
 
-void jprint_variable_data_base (void);
 
 void jprint_file_variables (const char *key, const struct file *file, int is_last);
 void jprint_target_variables (const char *key, const struct file *file, int is_last);
 
 void jprint_command_state(const char *key, unsigned int command_state, int is_last);
 void jprint_deps(const char *key, struct dep *dependencies, int is_last);
-void jprint_file (const void *item);
-void jprint_file_data_base (void);
+void jprint_file (const void *item, void *arg);
 
 
 
-void jprint_dir_data_base();
-void jprint_rule_data_base();
-void jprint_vpath_data_base();
+void jprint_variable_data_base (int is_last);
+void jprint_file_data_base (int is_last);
+void jprint_dir_data_base(int is_last);
+void jprint_rule_data_base(int is_last);
+void jprint_vpath_data_base(int is_last);
 void jstrcache_print_stats(const char *);
 
 extern FILE *json_file;
