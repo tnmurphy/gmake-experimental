@@ -3822,14 +3822,16 @@ print_data_base_json (void)
   /* printf (_("\n# Make data base, printed on %s\n"), buf); */
   
   v = lookup_variable (STRING_SIZE_TUPLE ("MAKEFILE_LIST"));
-  printf("\"%s\" :{\n", v->value);
-  jprint_variable_data_base ();
-  jprint_dir_data_base ();
-  jprint_rule_data_base ();
-  jprint_file_data_base ();
-  jprint_vpath_data_base ();
-  jstrcache_print_stats ("#");
-  printf("},\n");
+  fprintf(json_file, "\"");
+  print_escaped_string(v->value);
+  fprintf(json_file, "\" :{\n");
+  jprint_variable_data_base (0);
+  jprint_dir_data_base (0);
+  jprint_rule_data_base (0);
+  jprint_file_data_base (1);
+  /*jprint_vpath_data_base ();
+   jstrcache_print_stats ("#"); */
+  fprintf(json_file, "}\n");
 
   /* file_timestamp_sprintf (buf, file_timestamp_now (&resolution));
   printf (_("\n# Finished Make data base on %s\n\n"), buf); */
