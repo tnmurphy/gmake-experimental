@@ -3822,7 +3822,7 @@ print_data_base_json (void)
   /* printf (_("\n# Make data base, printed on %s\n"), buf); */
   
   v = lookup_variable (STRING_SIZE_TUPLE ("MAKEFILE_LIST"));
-  fprintf(json_file, "\"");
+  fprintf(json_file, "{\n\"");
   print_escaped_string(v->value);
   fprintf(json_file, "\" :{\n");
   jprint_variable_data_base (0);
@@ -3831,7 +3831,7 @@ print_data_base_json (void)
   jprint_file_data_base (1);
   /*jprint_vpath_data_base ();
    jstrcache_print_stats ("#"); */
-  fprintf(json_file, "}\n");
+  fprintf(json_file, "}\n}\n");
 
   /* file_timestamp_sprintf (buf, file_timestamp_now (&resolution));
   printf (_("\n# Finished Make data base on %s\n\n"), buf); */
