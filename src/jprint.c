@@ -467,21 +467,26 @@ void jprint_file_data_base (int is_last)
 
 void jprint_dir_data_base(int is_last)
 {
+  /* not implemented yet */
   fprintf (json_file, "\n\"dirs\": []%s\n", is_last ? "" : ",");
 }
 
 void jprint_rule_data_base(int is_last)
 {
+  /* not implemented yet */
   fprintf (json_file, "\n\"rules\": []%s\n", is_last ? "" : ",");
 }
 
 void jprint_vpath_data_base(int is_last)
 {
+  /* not implemented yet */
   fprintf (json_file, "\n\"vpath\": []%s\n", is_last ? "" : ",");
 }
 
-void jstrcache_print_stats(const char *)
+void jstrcache_print_stats(const char *p)
 {
+  /* not implemented yet */
+  fprintf(json_file, "%s", p ? "" : ""); /* prevent unused parameter wanrnings */
 }
 
 /* EOF */
