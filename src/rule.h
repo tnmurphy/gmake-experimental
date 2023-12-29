@@ -57,3 +57,4 @@ void create_pattern_rule (const char **targets, const char **target_percents,
                           struct commands *commands, int override);
 const char *get_rule_defn (struct rule *rule);
 void print_rule_data_base (void);
+
