@@ -21,6 +21,7 @@ this program.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "dep.h"
 #include "commands.h"
 #include "variable.h"
+#include "rule.h"
 #include "hash.h"
 
 #include "jprint.h"
@@ -472,10 +473,112 @@ void jprint_dir_data_base(int is_last)
   fprintf (json_file, "\n\"dirs\": []%s\n", is_last ? "" : ",");
 }
 
+
+void jprint_rule (struct rule *r)
+{
+  fprintf(json_file, "    { \n");
+  if (r->_defn == NULL)
+    {
+      unsigned int k;
+      const struct dep *dep, *ood = 0;
+      int is_first_dep = 1;
+
+      fprintf(json_file, "    \"targets\" : [\n");
+      for (k = 0; k < r->num; ++k) {
+        fprintf(json_file, "%s      \"%s\"", k == 0 ? "" : ",\n", r->targets[k]);
+      }
+      fprintf(json_file, "\n    ],\n");
+
+      if (r->terminal)
+      	fprintf(json_file, "      \"terminal\" : true, \n");
+
+      /* print all normal dependencies; find first order-only dep.  */
+      fprintf(json_file, "      \"deps\" : [\n");
+      
+      for (dep = r->deps; dep; dep = dep->next) {
+        if (dep->ignore_mtime == 0) { /* not an order only dependency */
+
+          if (!is_first_dep) {
+	    fprintf(json_file, ",\n");
+	  } else {
+	    is_first_dep = 0;
+	  }
+          if (dep->wait_here) {
+            fprintf(json_file, "        \".WAIT\"");
+          } else {
+            fprintf(json_file, "        \"%s\"", dep_name(dep));
+          }
+        } else if (ood == 0) {
+	  ood = dep; /* find the first OOD so we can process them next */
+	}
+      }
+      fprintf(json_file, "\n       ],\n");
+
+      fprintf(json_file, "\n      \"ood-deps\" : [\n");
+      /* print order-only deps, if we have any.  */
+      is_first_dep = 1;
+      for (;ood; ood = ood->next) {
+        if (ood->ignore_mtime)
+          {
+            if (!is_first_dep) {
+	      fprintf(json_file, ",\n");
+	    } else {
+	      is_first_dep = 0;
+	    }
+            if (ood->wait_here) {
+              fprintf(json_file, "        \".WAIT\"");
+            } else {
+              fprintf(json_file, "        \"%s\"", dep_name(ood));
+            }
+          }
+      }
+      fprintf(json_file, "      ]");
+  }
+
+  if (r->cmds != 0) {
+    fprintf(json_file, ",\n");
+    jprint_cmds ("cmds", r->cmds, 1);
+  } else {
+    fprintf(json_file, "\n");
+  }
+  fprintf(json_file, "    } \n");
+}
+
+
 void jprint_rule_data_base(int is_last)
 {
-  /* not implemented yet */
-  fprintf (json_file, "\n\"rules\": []%s\n", is_last ? "" : ",");
+  unsigned int rules, terminal;
+  struct rule *r;
+  /* unsigned int num_pattern_rules = get_num_pattern_rules(); */
+
+  fprintf (json_file, "\n\"rules\": {");
+  fprintf (json_file, "\n  \"implicit-rules\": [\n");
+
+  rules = terminal = 0;
+  for (r = pattern_rules; r != 0; r = r->next)
+    {
+      if (rules != 0) { 
+        fprintf(json_file, ",\n");
+      }
+      ++rules;
+
+      jprint_rule (r);
+
+      if (r->terminal)
+        ++terminal;
+    }
+
+  fprintf (json_file, "\n],\n \"terminal-rules-count\" : %u\n", terminal);
+  fprintf (json_file, "}%s\n", is_last ? "" : ",");
+
+  if (num_pattern_rules != rules)
+    {
+      /* This can happen if a fatal error was detected while reading the
+         makefiles and thus count_implicit_rule_limits wasn't called yet.  */
+      if (num_pattern_rules != 0)
+        ONN (fatal, NILF, "INTERNAL: num_pattern_rules is wrong!  %u != %u",
+             num_pattern_rules, rules);
+    }
 }
 
 void jprint_vpath_data_base(int is_last)
