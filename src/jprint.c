@@ -187,17 +187,18 @@ static void jprint_variable (const void *item, void *arg)
             v->fileinfo.filenm, v->fileinfo.lineno + v->fileinfo.offset);
 
     /* Is this a 'define'?  */
-  if (v->recursive && strchr (v->value, '\n') != 0)
-    fprintf (json_file, "  \"define\": \"%s\",\n", v->value);
-  else
-    {
+  if (v->recursive && strchr (v->value, '\n') != 0) {
+    fprintf (json_file, "  \"define\": \"");
+    print_escaped_string(v->value);
+    fprintf (json_file, "\"\n");
+  } else {
       fprintf (json_file, "  \"%s%s\": \"",      
         v->append ? "append" : "assign", 
         v->recursive ? "-recursive" : "");
       print_escaped_string(v->value);
       fprintf (json_file, "\"");
-    }
-     fprintf (json_file, "\n}");
+  }
+  fprintf (json_file, "\n}");
 }
 
 
