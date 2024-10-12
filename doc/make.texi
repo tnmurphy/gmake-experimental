@@ -6773,7 +6773,7 @@ Multiple @var{target} values create a target-specific variable value for
 each member of the target list individually.
 
 The @var{variable-assignment} can be any valid form of assignment; recursive
-(@samp{=}), simple (@samp{:=} or @samp{::=}), immediate (@samp{::=}), shell
+(@samp{=}), simple (@samp{:=} or @samp{::=}), immediate (@samp{:::=}), shell
 (@samp{!=}), or appending (@samp{+=}), and may be preceded by a conditional
 modifier (@samp{?}).  The variable that appears within the
 @var{variable-assignment} is evaluated within the context of the target: thus,
