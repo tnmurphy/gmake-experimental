@@ -3826,9 +3826,9 @@ clean_jobserver (int status)
         ONN (error, NILF,
              "INTERNAL: exiting with %u jobserver tokens available; should be %u!",
              tokens, master_job_slots);
-
-      reset_jobserver ();
     }
+
+  reset_jobserver ();
 }
 
 /* Exit with STATUS, cleaning up as necessary.  */

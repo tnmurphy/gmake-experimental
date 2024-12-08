@@ -399,8 +399,9 @@ sub toplevel
         ++$i;
         print "  Failure $i:\n";
         print "    run:  $e->{'run'}\n" if exists($e->{'run'});
-        print "    base: $e->{'base'}\n";
+        print "    base: $e->{'base'}\n" if exists($e->{'base'});
         print "    diff: $e->{'diff'}\n" if exists($e->{'diff'});
+        print "    log:  $e->{'log'}\n" if exists($e->{'log'});
     }
     return 0;
   }
@@ -1032,11 +1033,12 @@ sub compare_output
   my $run = get_runfile();
   my $diff = get_difffile();
 
-  my %e = ('base' => File::Spec->catdir($testpath, $base));
+  my %e = ('log' => File::Spec->catdir($testpath, $logfile));
 
   if (! $matched) {
     &create_file($base, $answer);
     &create_file($run, $command_string);
+    $e{'base'} = File::Spec->catdir($testpath, $base);
     $e{'run'} = File::Spec->catdir($testpath, $run);
   }
 

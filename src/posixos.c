@@ -147,6 +147,9 @@ jobserver_setup (int slots, const char *style)
 {
   int r;
 
+  /* This function sets up the root jobserver.  */
+  job_root = 1;
+
 #if JOBSERVER_USE_FIFO
   if (!style || strcmp (style, "fifo") == 0)
     {
@@ -217,8 +220,6 @@ jobserver_setup (int slots, const char *style)
 
   /* When using pselect() we want the read to be non-blocking.  */
   set_blocking (job_fds[0], 0);
-
-  job_root = 1;
 
   return 1;
 }
