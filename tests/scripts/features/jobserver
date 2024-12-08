@@ -211,4 +211,15 @@ all:;@echo "$$MAKEFLAGS"
   run_make_test(q!all:;@echo hi!, "", "#MAKE#: cannot open jobserver nosuchfile: $ERR_no_such_file\n#MAKE#: $j1err\nhi\n");
 }
 
+if ($port_type eq 'UNIX') {
+    # sv 66499. The specified number of jobs exceeds pipe capacity.
+    run_make_test(q!
+all:; $(info hello, world)
+    !, '-j688777', '/requested job count \(688777\) is larger than system limit/', 512);
+
+    run_make_test(q!
+all:; $(info hello, world)
+    !, '-j688777 --jobserver-style=pipe', '/requested job count \(688777\) is larger than system limit/', 512);
+}
+
 1;
