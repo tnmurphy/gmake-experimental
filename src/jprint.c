@@ -185,6 +185,7 @@ jprint_enum (const char *key, unsigned int value, int is_last)
            key, value, is_last ? "" : ",");
 }
 
+/* hash table stats */
 void
 hash_jprint_stats (const char *key, struct hash_table *ht, int is_last)
 {
@@ -205,15 +206,8 @@ hash_jprint_stats (const char *key, struct hash_table *ht, int is_last)
   jprintf_ (jstate, "}%s\n", is_last ? "" : ",");
 }
 
-/* ============================
- * JSON PRINT
- * =================================================================
- */
 
-/* Print information
- * for variable V,
- * prefixing it with
- * PREFIX.  */
+/* Print variable V, prefixing it with PREFIX.  */
 
 static void
 jprint_variable (const void *item, void *arg)
@@ -248,7 +242,6 @@ jprint_variable (const void *item, void *arg)
     case o_invalid:
       abort ();
     }
-  printf("=============================================ORIGIN %s\n", origin);
 
   if (state)
     {
@@ -268,7 +261,6 @@ jprint_variable (const void *item, void *arg)
           jprintf_ (jstate, ",\n");
         }
     }
-  printf("======================VNAME %s", v->name);
   jprintf_ (jstate,
            "\"%s\" : {\n",
            v->name);

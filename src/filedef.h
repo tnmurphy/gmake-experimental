@@ -137,7 +137,6 @@ void verify_file_data_base (void);
 char *build_target_list (char *old_list);
 void print_file_data_base (void);
 void print_targets (void);
-void jprint_file_data_base (void);
 int try_implicit_rule (struct file *file, unsigned int depth);
 int stemlen_compare (const void *v1, const void *v2);
 
