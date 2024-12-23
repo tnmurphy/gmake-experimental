@@ -20,6 +20,8 @@ struct file;
 struct dep;
 struct commands;
 
+FILE *jopen(char filename[]);
+int jprintf(const char *fmt, ...);
 void print_escaped_string(const char *input);
 
 void jprint_bool(const char *key, int value, int is_last);
@@ -47,6 +49,5 @@ void jprint_rule_data_base(int is_last);
 void jprint_vpath_data_base(int is_last);
 void jstrcache_print_stats(const char *);
 
-extern FILE *json_file;
 
 #endif /* _JPRINT_H_ */

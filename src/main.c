@@ -3822,16 +3822,16 @@ print_data_base_json (void)
   /* printf (_("\n# Make data base, printed on %s\n"), buf); */
   
   v = lookup_variable (STRING_SIZE_TUPLE ("MAKEFILE_LIST"));
-  fprintf(json_file, "{\n\"");
+  jprintf("{\n\"");
   print_escaped_string(v->value);
-  fprintf(json_file, "\" :{\n");
+  jprintf("\" :{\n");
   jprint_variable_data_base (0);
   jprint_dir_data_base (0);
   jprint_rule_data_base (0);
   jprint_file_data_base (1);
   /*jprint_vpath_data_base ();
    jstrcache_print_stats ("#"); */
-  fprintf(json_file, "}\n}\n");
+  jprintf("}\n}\n");
 
   /* file_timestamp_sprintf (buf, file_timestamp_now (&resolution));
   printf (_("\n# Finished Make data base on %s\n\n"), buf); */
@@ -3908,10 +3908,15 @@ die (int status)
         print_data_base ();
       else if (print_data_base_json_flag) {
 	char jsonfilename[GET_PATH_MAX];
+	FILE *json_file;
 	printf("Writing database to json file");
 	snprintf(jsonfilename, GET_PATH_MAX-1, "makefile-%d.json", (int)getpid());
-        json_file = fopen(jsonfilename, "w");
-        print_data_base_json();
+        json_file = jopen(jsonfilename);
+	if (json_file) {
+            print_data_base_json();
+	} else {
+            fprintf(stderr, "file open returned %d", errno);
+	}
       }
 
       if (verify_flag)

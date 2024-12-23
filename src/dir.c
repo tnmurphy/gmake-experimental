@@ -18,7 +18,9 @@ this program.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "hash.h"
 #include "filedef.h"
 #include "dep.h"
+
 #include "debug.h"
+#include "dir_int.h" /* internal datastructures that nevertheless need exporting sometimes. */
 
 #ifdef HAVE_DIRENT_H
 # include <dirent.h>
@@ -68,6 +70,7 @@ const char *vmsify (const char *name, int type);
 #ifndef _USE_LFN
 #define _USE_LFN 0
 #endif
+
 
 static const char *
 dosify (const char *filename)
@@ -241,34 +244,6 @@ static unsigned int open_directories = 0;
 #define DIRECTORY_BUCKETS 199
 #endif
 
-struct directory_contents
-  {
-    dev_t dev;                  /* Device and inode numbers of this dir.  */
-#if MK_OS_W32
-    /* Inode means nothing on Windows32. Even file key information is
-     * unreliable because it is random per file open and undefined for remote
-     * filesystems. The most unique attribute I can come up with is the fully
-     * qualified name of the directory. Beware though, this is also
-     * unreliable. I'm open to suggestion on a better way to emulate inode.  */
-    char *path_key;
-    time_t ctime;
-    time_t mtime;        /* controls check for stale directory cache */
-    int fs_flags;     /* FS_FAT, FS_NTFS, ... */
-# define FS_FAT      0x1
-# define FS_NTFS     0x2
-# define FS_UNKNOWN  0x4
-#else
-# if MK_OS_VMS_INO_T
-    ino_t ino[3];
-# else
-    ino_t ino;
-# endif
-#endif /* MK_OS_W32 */
-    struct hash_table dirfiles; /* Files in this directory.  */
-    unsigned long counter;      /* command_count value when last read. */
-    DIR *dirstream;             /* Stream reading this directory.  */
-  };
-
 static struct directory_contents *
 clear_directory_contents (struct directory_contents *dc)
 {
@@ -284,6 +259,9 @@ clear_directory_contents (struct directory_contents *dc)
 
   return NULL;
 }
+
+/* Table of directory contents hashed by device and inode number.  */
+ struct hash_table directory_contents;
 
 static unsigned long
 directory_contents_hash_1 (const void *key_0)
@@ -378,21 +356,6 @@ directory_contents_hash_cmp (const void *xv, const void *yv)
   return MAKECMP(x->dev, y->dev);
 }
 
-/* Table of directory contents hashed by device and inode number.  */
-static struct hash_table directory_contents;
-
-struct directory
-  {
-    const char *name;           /* Name of the directory.  */
-    unsigned long counter;      /* command_count value when last read.
-                                   Used for non-existent directories.  */
-
-    /* The directory's contents.  This data may be shared by several
-       entries in the hash table, which refer to the same directory
-       (identified uniquely by 'dev' and 'ino') under different names.  */
-    struct directory_contents *contents;
-  };
-
 static unsigned long
 directory_hash_1 (const void *key)
 {
@@ -413,18 +376,7 @@ directory_hash_cmp (const void *x, const void *y)
 }
 
 /* Table of directories hashed by name.  */
-static struct hash_table directories;
-
-
-/* Hash table of files in each directory.  */
-
-struct dirfile
-  {
-    const char *name;           /* Name of the file.  */
-    size_t length;
-    short impossible;           /* This file is impossible.  */
-    unsigned char type;
-  };
+struct hash_table directories;
 
 static unsigned long
 dirfile_hash_1 (const void *key)

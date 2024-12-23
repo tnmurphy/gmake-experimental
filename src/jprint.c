@@ -19,6 +19,7 @@ with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "makeint.h"
 #include <stdarg.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "commands.h"
 #include "dep.h"
@@ -26,8 +27,10 @@ with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "hash.h"
 #include "rule.h"
 #include "variable.h"
+#include "dir_int.h"
 
 #include "jprint.h"
+#include <assert.h>
 
 typedef struct
 {
@@ -37,17 +40,39 @@ typedef struct
   FILE *json_file;
 } jprint_state;
 
+
 jprint_state global_jstate;
 jprint_state *jstate = &global_jstate;
 
+FILE *jopen(char filename[])
+{
+  jstate->json_file = fopen(filename, "w");
+
+  return jstate->json_file;
+}
+
+
 int
-jprintf (jprint_state *jstate_, const char *fmt, ...)
+jprintf(const char *fmt, ...)
 {
   // initializing
   // list pointer
   va_list args;
   va_start (args, fmt);
-  fprintf (jstate_->json_file, fmt, args);
+  vfprintf (jstate->json_file, fmt, args);
+
+  va_end (args);
+  return 0;
+}
+
+int
+jprintf_ (jprint_state *jstate_, const char *fmt, ...)
+{
+  // initializing
+  // list pointer
+  va_list args;
+  va_start (args, fmt);
+  vfprintf (jstate_->json_file, fmt, args);
 
   va_end (args);
   return 0;
@@ -75,36 +100,36 @@ print_escaped_string (const char *input)
         case '\0':
           break;
         case '\b':
-          jprintf (jstate, "\\n");
+          jprintf_ (jstate, "\\n");
           break;
         case '\f':
-          jprintf (jstate, "\\f");
+          jprintf_ (jstate, "\\f");
           break;
         case '\n':
-          jprintf (jstate, "\\n");
+          jprintf_ (jstate, "\\n");
           break;
         case '\r':
-          jprintf (jstate, "\\r");
+          jprintf_ (jstate, "\\r");
           break;
         case '\t':
-          jprintf (jstate, "\\t");
+          jprintf_ (jstate, "\\t");
           break;
         case '\v':
-          jprintf (jstate, "\\v");
+          jprintf_ (jstate, "\\v");
           break;
         case '\\':
-          jprintf (jstate, "\\\\");
+          jprintf_ (jstate, "\\\\");
           break;
         case '/':
-          jprintf (jstate, "\\/");
+          jprintf_ (jstate, "\\/");
           break;
         case '"':
-          jprintf (jstate, "\\\"");
+          jprintf_ (jstate, "\\\"");
           break;
         default:
           if ((*inchar >= '\x01' && *inchar <= '\x1f') || *inchar < 0)
             {
-              jprintf (jstate, "\\u00%2x", (unsigned char)*inchar);
+              jprintf_ (jstate, "\\u00%2x", (unsigned char)*inchar);
             }
           else
             {
@@ -118,7 +143,7 @@ print_escaped_string (const char *input)
 void
 jprint_bool (const char *key, int value, int is_last)
 {
-  jprintf (jstate,
+  jprintf_ (jstate,
            "  \"%s\": %s%s\n",
            key, value ? "true" : "false", is_last ? "" : ",");
 }
@@ -128,7 +153,7 @@ jprint_pointer (const char *key, const void *value, int is_last)
 {
   if (value)
     {
-      jprintf (jstate,
+      jprintf_ (jstate,
                "  \"%s\": %p%s\n",
                key, value, is_last ? "" : ",");
     }
@@ -137,7 +162,7 @@ jprint_pointer (const char *key, const void *value, int is_last)
 void
 jprint_unsigned_int (const char *key, unsigned int value, int is_last)
 {
-  jprintf (jstate,
+  jprintf_ (jstate,
            "  \"%s\": %u%s\n",
            key, value, is_last ? "" : ",");
 }
@@ -145,17 +170,17 @@ jprint_unsigned_int (const char *key, unsigned int value, int is_last)
 void
 jprint_string (const char *key, const char *value, int is_last)
 {
-  jprintf (jstate,
+  jprintf_ (jstate,
            "  \"%s\": \"",
            key);
   print_escaped_string (value);
-  jprintf (jstate, "\"%s\n", is_last ? "" : ",");
+  jprintf_ (jstate, "\"%s\n", is_last ? "" : ",");
 }
 
 void
 jprint_enum (const char *key, unsigned int value, int is_last)
 {
-  jprintf (jstate,
+  jprintf_ (jstate,
            "  \"%s\": %u%s\n",
            key, value, is_last ? "" : ",");
 }
@@ -163,21 +188,21 @@ jprint_enum (const char *key, unsigned int value, int is_last)
 void
 hash_jprint_stats (const char *key, struct hash_table *ht, int is_last)
 {
-  jprintf (jstate, "\"%s\": {\n", key);
-  jprintf (jstate,
+  jprintf_ (jstate, "\"%s\": {\n", key);
+  jprintf_ (jstate,
            "  \"load\": \"%lu/%lu=%.0f%%\",\n",
            ht->ht_fill, ht->ht_size,
            100.0 * (double)ht->ht_fill / (double)ht->ht_size);
-  jprintf (jstate,
+  jprintf_ (jstate,
            "  \"rehash\": %u,\n",
            ht->ht_rehashes);
-  jprintf (jstate,
+  jprintf_ (jstate,
            "  \"collisions\": \"%lu/%lu=%.0f%%\"\n",
            ht->ht_collisions, ht->ht_lookups,
            (ht->ht_lookups
                 ? (100.0 * (double)ht->ht_collisions / (double)ht->ht_lookups)
                 : 0));
-  jprintf (jstate, "}%s\n", is_last ? "" : ",");
+  jprintf_ (jstate, "}%s\n", is_last ? "" : ",");
 }
 
 /* ============================
@@ -223,6 +248,7 @@ jprint_variable (const void *item, void *arg)
     case o_invalid:
       abort ();
     }
+  printf("=============================================ORIGIN %s\n", origin);
 
   if (state)
     {
@@ -239,21 +265,22 @@ jprint_variable (const void *item, void *arg)
         }
       else
         {
-          jprintf (jstate, ",\n");
+          jprintf_ (jstate, ",\n");
         }
     }
-  jprintf (jstate,
+  printf("======================VNAME %s", v->name);
+  jprintf_ (jstate,
            "\"%s\" : {\n",
            v->name);
-  jprintf (jstate,
+  jprintf_ (jstate,
            "  \"origin\": \"%s\",\n",
            origin);
-  jprintf (jstate,
+  jprintf_ (jstate,
            "  \"private\": %s,\n",
            v->private_var ? "true"
                           : "false");
   if (v->fileinfo.filenm)
-    jprintf (jstate,
+    jprintf_ (jstate,
              "  \"source\": \"%s\",\n  \"line\": %lu,\n",
              v->fileinfo.filenm, v->fileinfo.lineno + v->fileinfo.offset);
 
@@ -261,22 +288,22 @@ jprint_variable (const void *item, void *arg)
    * 'define'?  */
   if (v->recursive && strchr (v->value, '\n') != 0)
     {
-      jprintf (jstate, "  \"define\": \"");
+      jprintf_ (jstate, "  \"define\": \"");
       print_escaped_string (v->value);
-      jprintf (jstate, "\"\n");
+      jprintf_ (jstate, "\"\n");
     }
   else
     {
-      jprintf (jstate,
+      jprintf_ (jstate,
                "  \"%s%s\": \"",
                v->append ? "append"
                          : "assign",
                v->recursive ? "-recursive"
                             : "");
       print_escaped_string (v->value);
-      jprintf (jstate, "\"");
+      jprintf_ (jstate, "\"");
     }
-  jprintf (jstate, "\n}");
+  jprintf_ (jstate, "\n}");
 }
 
 static void
@@ -311,14 +338,14 @@ jprint_variable_set (const char *key, struct variable_set *set, int pauto,
                      int is_last)
 {
   jprint_state vstate;
+  vstate = *jstate;
   vstate.is_first = 1;
-  vstate.indent = global_jprint_state.indent;
 
   if (!set)
     {
       return;
     }
-  jprintf (jstate,
+  jprintf_ (jstate,
            "  \"%s\": {\n",
            key);
   hash_map_arg (&set->table, (pauto ? jprint_auto_variable : jprint_variable),
@@ -327,7 +354,7 @@ jprint_variable_set (const char *key, struct variable_set *set, int pauto,
    * ("hash-table-stats",
    * &set->table,
    * 1); */
-  jprintf (jstate, "}%s\n", is_last ? "" : ",");
+  jprintf_ (jstate, "}%s\n", is_last ? "" : ",");
 }
 
 /* Print the data
@@ -337,34 +364,37 @@ jprint_variable_set (const char *key, struct variable_set *set, int pauto,
 void
 jprint_variable_data_base (int is_last)
 {
-  jprintf (jstate, "\"variables\": {\n");
+  jprintf_ (jstate, "\"variables\": {\n");
 
   jprint_variable_set ("global", &global_variable_set, 0, 0);
 
-  jprintf (jstate, "\"pattern-specific-variables\" : {\n");
+  jprintf_ (jstate, "\"pattern-specific-variables\" : {\n");
 
   {
     struct pattern_var *p;
     unsigned int rules = 0;
-    variable_print_state vstate;
-    vstate.is_first = 1;
-    vstate.indent = 2;
+
+    jprint_state jstate_;
+    jstate_ = *jstate;
+
+    jstate_.is_first = 1;
+    jstate_.indent += 2;
 
     for (p = pattern_vars; p != 0; p = p->next)
       {
         ++rules;
-        jprintf (jstate,
+        jprintf_ (&jstate_,
                  "\n\"%s\" :\n",
                  p->target);
-        jprint_variable (&p->variable, (void *)&vstate);
+        jprint_variable (&p->variable, (void *)&jstate);
       }
 
-    jprintf (jstate, "\n},\n");
+    jprintf_ (&jstate_, "\n},\n");
 
-    jprintf (jstate,
+    jprintf_ (&jstate_,
              "  \"pattern-specific-rule-count\": %u\n",
              rules);
-    jprintf (jstate, "}%s", is_last ? "" : ",");
+    jprintf_ (&jstate_, "}%s", is_last ? "" : ",");
   }
 }
 
@@ -382,7 +412,7 @@ jprint_file_variables (const char *key, const struct file *file, int is_last)
 void
 jprint_target_variables (const char *key, const struct file *file, int is_last)
 {
-  jprintf (jstate,
+  jprintf_ (jstate,
            "  \"%s\": {\n",
            key);
   if (file->variables != 0)
@@ -397,26 +427,26 @@ jprint_target_variables (const char *key, const struct file *file, int is_last)
 
       hash_map_arg (&file->variables->set->table, jprint_noauto_variable, t);
     }
-  jprintf (jstate, "  }%s\n", is_last ? "" : ",");
+  jprintf_ (jstate, "  }%s\n", is_last ? "" : ",");
 }
 
 void
 jprint_command_state (const char *key, unsigned int command_state, int is_last)
 {
-  jprintf (jstate, "  \"%s\": ", key);
+  jprintf_ (jstate, "  \"%s\": ", key);
   switch (command_state)
     {
     case cs_running:
-      jprintf (jstate, "\"cs_running\"");
+      jprintf_ (jstate, "\"cs_running\"");
       break;
     case cs_deps_running:
-      jprintf (jstate, "\"cs_deps_running\"");
+      jprintf_ (jstate, "\"cs_deps_running\"");
       break;
     case cs_not_started:
-      jprintf (jstate, "\"cs_not_started\"");
+      jprintf_ (jstate, "\"cs_not_started\"");
       break;
     case cs_finished:
-      jprintf (jstate, "\"cs_not_finished\"");
+      jprintf_ (jstate, "\"cs_not_finished\"");
       /*
       switch
       (f->update_status)
@@ -442,27 +472,27 @@ jprint_command_state (const char *key, unsigned int command_state, int is_last)
       fflush (stderr);
       abort ();
     }
-  jprintf (jstate, "%s\n", is_last ? "" : ",");
+  jprintf_ (jstate, "%s\n", is_last ? "" : ",");
 }
 
 void
 jprint_deps (const char *key, struct dep *dependencies, int is_last)
 {
-  jprintf (jstate, "  \"%s\": ", key);
+  jprintf_ (jstate, "  \"%s\": ", key);
   if (dependencies)
     {
       const struct dep *d;
-      jprintf (jstate, "[\n");
+      jprintf_ (jstate, "[\n");
       for (d = dependencies; d != 0; d = d->next)
         {
-          jprintf (jstate, "     \"%s\"%s\n",
+          jprintf_ (jstate, "     \"%s\"%s\n",
                    dep_name (d), !d->next ? "" : ",");
         }
-      jprintf (jstate, "]%s\n", is_last ? "" : ",");
+      jprintf_ (jstate, "]%s\n", is_last ? "" : ",");
     }
   else
     {
-      jprintf (jstate, "  []%s\n", is_last ? "" : ",");
+      jprintf_ (jstate, "  []%s\n", is_last ? "" : ",");
     }
 }
 
@@ -475,26 +505,26 @@ jprint_cmds (const char *key, struct commands *cmds, int is_last)
       return;
     }
 
-  jprintf (jstate,
+  jprintf_ (jstate,
            "\"%s\" : {\n\"source\": ", key);
 
   if (cmds->fileinfo.filenm == 0)
-    jprintf (jstate, "\"builtin\", ");
+    jprintf_ (jstate, "\"builtin\", ");
   else
-    jprintf (jstate,
+    jprintf_ (jstate,
              "\"%s\",\n \"line\": %lu,\n",
              cmds->fileinfo.filenm, cmds->fileinfo.lineno);
 
-  jprintf (jstate, "\"commands\": \"");
+  jprintf_ (jstate, "\"commands\": \"");
   print_escaped_string (cmds->commands);
-  jprintf (jstate, "\"\n}%s\n", is_last ? "" : ",");
+  jprintf_ (jstate, "\"\n}%s\n", is_last ? "" : ",");
 }
 
 void
 jprint_file (const void *item, void *arg)
 {
   const struct file *f = item;
-  file_print_state *state = (file_print_state *)arg;
+  jprint_state *state = (jprint_state *)arg;
 
   if (no_builtin_rules_flag && f->builtin)
     return;
@@ -514,11 +544,11 @@ jprint_file (const void *item, void *arg)
         }
       else
         {
-          jprintf (jstate, ",\n");
+          jprintf_ (state, ",\n");
         }
     }
 
-  jprintf (jstate,
+  jprintf_ (state,
            "\"%s\" : {\n",
            f->name);
   jprint_string ("hname", f->hname, 0);
@@ -557,7 +587,7 @@ jprint_file (const void *item, void *arg)
   jprint_unsigned_int ("last_mtime", f->last_mtime, 0);
   jprint_unsigned_int ("mtime_before_update", f->mtime_before_update, 0);
   jprint_unsigned_int ("considered", f->considered, 0);
-  jprintf (jstate, "  \"command_flags\": %d,\n", f->command_flags);
+  jprintf_ (jstate, "  \"command_flags\": %d,\n", f->command_flags);
   jprint_enum ("update_status", f->update_status, 0);
   jprint_command_state ("command_state", f->command_state, 0);
   jprint_bool ("builtin", f->builtin, 0);
@@ -581,36 +611,28 @@ jprint_file (const void *item, void *arg)
   jprint_bool ("no_diag", f->no_diag, 0);
   jprint_bool ("was_shuffled", f->was_shuffled, 0);
   jprint_bool ("snapped", f->snapped, 1);
-  jprintf (jstate, "}\n");
+  jprintf_ (jstate, "}\n");
 }
 
 void
 jprint_file_data_base (int is_last)
 {
-  file_print_state fstate;
-  fstate.is_first = 1;
-  fstate.indent = 2;
+  jprint_state state;
+  state = *jstate;
+  state.is_first = 1;
+  state.indent += 2;
 
-  jprintf (jstate, "\n\"files\": {\n");
+  jprintf_ (&state, "\n\"files\": {\n");
 
-  hash_map_arg (get_files (), jprint_file, (void *)&fstate);
+  hash_map_arg (get_files (), jprint_file, (void *)&state);
 
-  jprintf (jstate, "\n}%s\n", is_last ? "" : ",");
+  jprintf_ (&state, "\n}%s\n", is_last ? "" : ",");
   /* hash_jprint_stats("hash-table-stats", * get_files(), * 0); */
 }
 
-void
-jprint_dir_data_base (int is_last)
-{
-  /* not implemented
-   * yet */
-  /* jprintf(jstate,
-   * "\n\"dirs\":
-   * []%s\n",
-   * is_last ? "" :
-   * ","); */
 
-  void print_dir_data_base (void)
+void 
+jprint_dir_data_base (int is_last)
   {
     unsigned int files;
     unsigned int impossible;
@@ -619,8 +641,11 @@ jprint_dir_data_base (int is_last)
 #if MK_OS_W32
     char buf[INTSTR_LENGTH + 1];
 #endif
+    if (is_last) {
+        jprintf_(jstate,"");
+    }
 
-    jprintf (jstate, "\n\"directories\" : [\n");
+    jprintf_ (jstate, "\n\"directories\" : [\n");
 
     files = impossible = 0;
 
@@ -715,28 +740,29 @@ jprint_dir_data_base (int is_last)
       printf ("%u", impossible);
     printf (_ (" impossibilities in %lu directories.\n"),
             directories.ht_fill);
+    jprintf_ (jstate, "    ], \n");
   }
 
   void jprint_rule (struct rule * r)
   {
-    jprintf (jstate, "    { \n");
+    jprintf_ (jstate, "    { \n");
     if (r->_defn == NULL)
       {
         unsigned int k;
         const struct dep *dep, *ood = 0;
         int is_first_dep = 1;
 
-        jprintf (jstate, "    \"targets\" : [\n");
+        jprintf_ (jstate, "    \"targets\" : [\n");
         for (k = 0; k < r->num; ++k)
           {
-            jprintf (jstate,
+            jprintf_ (jstate,
                      "%s      \"%s\"",
                      k == 0 ? "" : ",\n", r->targets[k]);
           }
-        jprintf (jstate, "\n    ],\n");
+        jprintf_ (jstate, "\n    ],\n");
 
         if (r->terminal)
-          jprintf (jstate, "      \"terminal\" : true, \n");
+          jprintf_ (jstate, "      \"terminal\" : true, \n");
 
         /* print all
          * normal
@@ -745,7 +771,7 @@ jprint_dir_data_base (int is_last)
          * first
          * order-only
          * dep.  */
-        jprintf (jstate, "      \"deps\" : [\n");
+        jprintf_ (jstate, "      \"deps\" : [\n");
 
         for (dep = r->deps; dep; dep = dep->next)
           {
@@ -755,7 +781,7 @@ jprint_dir_data_base (int is_last)
 
                 if (!is_first_dep)
                   {
-                    jprintf (jstate, ",\n");
+                    jprintf_ (jstate, ",\n");
                   }
                 else
                   {
@@ -763,11 +789,11 @@ jprint_dir_data_base (int is_last)
                   }
                 if (dep->wait_here)
                   {
-                    jprintf (jstate, "        \".WAIT\"");
+                    jprintf_ (jstate, "        \".WAIT\"");
                   }
                 else
                   {
-                    jprintf (jstate, "        \"%s\"", dep_name (dep));
+                    jprintf_ (jstate, "        \"%s\"", dep_name (dep));
                   }
               }
             else if (ood == 0)
@@ -775,9 +801,9 @@ jprint_dir_data_base (int is_last)
                 ood = dep; /* find the first OOD so we can process them next */
               }
           }
-        jprintf (jstate, "\n       ],\n");
+        jprintf_ (jstate, "\n       ],\n");
 
-        jprintf (jstate, "\n      \"ood-deps\" : [\n");
+        jprintf_ (jstate, "\n      \"ood-deps\" : [\n");
         /* print
          * order-only
          * deps, if
@@ -790,7 +816,7 @@ jprint_dir_data_base (int is_last)
               {
                 if (!is_first_dep)
                   {
-                    jprintf (jstate, ",\n");
+                    jprintf_ (jstate, ",\n");
                   }
                 else
                   {
@@ -798,27 +824,27 @@ jprint_dir_data_base (int is_last)
                   }
                 if (ood->wait_here)
                   {
-                    jprintf (jstate, "        \".WAIT\"");
+                    jprintf_ (jstate, "        \".WAIT\"");
                   }
                 else
                   {
-                    jprintf (jstate, "        \"%s\"", dep_name (ood));
+                    jprintf_ (jstate, "        \"%s\"", dep_name (ood));
                   }
               }
           }
-        jprintf (jstate, "      ]");
+        jprintf_ (jstate, "      ]");
       }
 
     if (r->cmds != 0)
       {
-        jprintf (jstate, ",\n");
+        jprintf_ (jstate, ",\n");
         jprint_cmds ("cmds", r->cmds, 1);
       }
     else
       {
-        jprintf (jstate, "\n");
+        jprintf_ (jstate, "\n");
       }
-    jprintf (jstate, "    } \n");
+    jprintf_ (jstate, "    } \n");
   }
 
   void jprint_rule_data_base (int is_last)
@@ -831,15 +857,15 @@ jprint_dir_data_base (int is_last)
      * get_num_pattern_rules();
      */
 
-    jprintf (jstate, "\n\"rules\": {");
-    jprintf (jstate, "\n  \"implicit-rules\": [\n");
+    jprintf_ (jstate, "\n\"rules\": {");
+    jprintf_ (jstate, "\n  \"implicit-rules\": [\n");
 
     rules = terminal = 0;
     for (r = pattern_rules; r != 0; r = r->next)
       {
         if (rules != 0)
           {
-            jprintf (jstate, ",\n");
+            jprintf_ (jstate, ",\n");
           }
         ++rules;
 
@@ -849,10 +875,10 @@ jprint_dir_data_base (int is_last)
           ++terminal;
       }
 
-    jprintf (jstate,
+    jprintf_ (jstate,
              "\n],\n \"terminal-rules-count\" : %u\n",
              terminal);
-    jprintf (jstate, "}%s\n", is_last ? "" : ",");
+    jprintf_ (jstate, "}%s\n", is_last ? "" : ",");
 
     if (num_pattern_rules != rules)
       {
@@ -871,7 +897,7 @@ jprint_dir_data_base (int is_last)
   void jprint_vpath_data_base (int is_last)
   {
     /* not  implemented  yet */
-    jprintf (jstate,
+    jprintf_ (jstate,
              "\n\"vpath\": []%s\n",
              is_last ? "" : ",");
   }
@@ -879,7 +905,7 @@ jprint_dir_data_base (int is_last)
   void jstrcache_print_stats (const char *p)
   {
     /* not implemented yet */
-    jprintf (jstate, "%s",
+    jprintf_ (jstate, "%s",
              p ? "" : ""); /* prevent unused parameter wanrnings */
   }
 
