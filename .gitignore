@@ -15,6 +15,7 @@ GTAGS
 *.patch
 *.orig
 *.rej
+._UG#_Store
 
 # Configure artifacts
 /lib/
@@ -76,3 +77,5 @@ mkconfig.h
 make-[0-9]*/
 make-[0-9]*.tar.*
 checkcfg.*.log
+
+
