@@ -17,19 +17,19 @@ with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "makeint.h"
-#include <stdarg.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <sys/file.h>
 #include <fcntl.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/file.h>
 
 #include "commands.h"
 #include "dep.h"
+#include "dir_int.h"
 #include "filedef.h"
 #include "hash.h"
 #include "rule.h"
 #include "variable.h"
-#include "dir_int.h"
 
 #include "jprint.h"
 #include <assert.h>
@@ -39,25 +39,22 @@ with this program.  If not, see <https://www.gnu.org/licenses/>.
   for the output of json data.  It includes things like the current
   indent level and the file handle where json output is to be written.
 */
-typedef struct
-{
+typedef struct {
   int is_first;
   int indent;
   char *specific_target;
   FILE *json_file;
 } jprint_state;
 
-
 jprint_state global_jstate;
 jprint_state *jstate = &global_jstate;
 
 /*
-  Opens the file into which this make instance's json output will go. 
+  Opens the file into which this make instance's json output will go.
   The point here is that as a side effect the file handle is put into the
   state singleton for use by all the other printing functions.
 */
-FILE *jopen(char filename[])
-{
+FILE *jopen(char filename[]) {
   jstate->json_file = fopen(filename, "w");
 
   return jstate->json_file;
@@ -68,324 +65,255 @@ FILE *jopen(char filename[])
    go back and reassemble a build
 */
 int jappend_to_index(const char *index_filename, const char *jsonfilename) {
-    int fd;
-    int retries = 5;
-    int retry_delay_ms = 100;
-    ssize_t written = 0;
+  int fd;
+  int retries = 5;
+  int retry_delay_ms = 100;
+  ssize_t written = 0;
 
-    while (retries-- > 0) {
-        fd = open(index_filename, O_WRONLY | O_APPEND | O_CREAT, 0644);
-        if (fd == -1) {
-            perror("open");
-            return -1;
-        }
+  while (retries-- > 0) {
+    fd = open(index_filename, O_WRONLY | O_APPEND | O_CREAT, 0644);
+    if (fd == -1) {
+      perror("open");
+      return -1;
+    }
 
-        // Try to get an exclusive lock
-        if (flock(fd, LOCK_EX | LOCK_NB) == -1) {
-            if (errno == EWOULDBLOCK) {
-                // Lock is held by another process, wait and retry
-                close(fd);
-                usleep(retry_delay_ms * 1000);
-                continue;
-            } else {
-                perror("flock");
-                close(fd);
-                return -1;
-            }
-        }
-
-        // Got the lock, write the filename
-        written = write(fd, jsonfilename, strlen(jsonfilename));
-        if (written == -1) {
-            perror("write");
-            flock(fd, LOCK_UN);
-            close(fd);
-            return -1;
-        }
-        // Write a newline
-        write(fd, "\n", 1);
-
-        // Release the lock and close the file
-        flock(fd, LOCK_UN);
+    // Try to get an exclusive lock
+    if (flock(fd, LOCK_EX | LOCK_NB) == -1) {
+      if (errno == EWOULDBLOCK) {
+        // Lock is held by another process, wait and retry
         close(fd);
-        return 0;
+        usleep(retry_delay_ms * 1000);
+        continue;
+      } else {
+        perror("flock");
+        close(fd);
+        return -1;
+      }
     }
 
-    fprintf(stderr, "Failed to acquire json index file lock after retries\n");
-    return -1;
+    // Got the lock, write the filename
+    written = write(fd, jsonfilename, strlen(jsonfilename));
+    if (written == -1) {
+      perror("write");
+      flock(fd, LOCK_UN);
+      close(fd);
+      return -1;
+    }
+    // Write a newline
+    write(fd, "\n", 1);
+
+    // Release the lock and close the file
+    flock(fd, LOCK_UN);
+    close(fd);
+    return 0;
+  }
+
+  fprintf(stderr, "Failed to acquire json index file lock after retries\n");
+  return -1;
 }
 
-
-int
-jprintf(const char *fmt, ...)
-{
+int jprintf(const char *fmt, ...) {
   // initializing
   // list pointer
   va_list args;
-  va_start (args, fmt);
-  vfprintf (jstate->json_file, fmt, args);
+  va_start(args, fmt);
+  vfprintf(jstate->json_file, fmt, args);
 
-  va_end (args);
+  va_end(args);
   return 0;
 }
 
-int
-jprintf_ (jprint_state *jstate_, const char *fmt, ...)
-{
+int jprintf_(jprint_state *jstate_, const char *fmt, ...) {
   // initializing
   // list pointer
   va_list args;
-  va_start (args, fmt);
-  vfprintf (jstate_->json_file, fmt, args);
+  va_start(args, fmt);
+  vfprintf(jstate_->json_file, fmt, args);
 
-  va_end (args);
+  va_end(args);
   return 0;
 }
 
-int
-jputc (jprint_state *jstate_, const char c)
-{
-  return fputc (c, jstate_->json_file);
+int jputc(jprint_state *jstate_, const char c) {
+  return fputc(c, jstate_->json_file);
 }
 
-void
-print_escaped_string (const char *input)
-{
+void print_escaped_string(const char *input) {
   const char *inchar = input;
-  if (!input)
-    {
-      return;
-    }
+  if (!input) {
+    return;
+  }
 
-  while (*inchar != '\0')
-    {
-      switch (*inchar)
-        {
-        case '\0':
-          break;
-        case '\b':
-          jprintf_ (jstate, "\\n");
-          break;
-        case '\f':
-          jprintf_ (jstate, "\\f");
-          break;
-        case '\n':
-          jprintf_ (jstate, "\\n");
-          break;
-        case '\r':
-          jprintf_ (jstate, "\\r");
-          break;
-        case '\t':
-          jprintf_ (jstate, "\\t");
-          break;
-        case '\v':
-          jprintf_ (jstate, "\\v");
-          break;
-        case '\\':
-          jprintf_ (jstate, "\\\\");
-          break;
-        case '/':
-          jprintf_ (jstate, "\\/");
-          break;
-        case '"':
-          jprintf_ (jstate, "\\\"");
-          break;
-        default:
-          if ((*inchar >= '\x01' && *inchar <= '\x1f') || *inchar < 0)
-            {
-              jprintf_ (jstate, "\\u00%2x", (unsigned char)*inchar);
-            }
-          else
-            {
-              jputc (jstate, *inchar);
-            }
-        }
-      inchar++;
+  while (*inchar != '\0') {
+    switch (*inchar) {
+    case '\0':
+      break;
+    case '\b':
+      jprintf_(jstate, "\\n");
+      break;
+    case '\f':
+      jprintf_(jstate, "\\f");
+      break;
+    case '\n':
+      jprintf_(jstate, "\\n");
+      break;
+    case '\r':
+      jprintf_(jstate, "\\r");
+      break;
+    case '\t':
+      jprintf_(jstate, "\\t");
+      break;
+    case '\v':
+      jprintf_(jstate, "\\v");
+      break;
+    case '\\':
+      jprintf_(jstate, "\\\\");
+      break;
+    case '/':
+      jprintf_(jstate, "\\/");
+      break;
+    case '"':
+      jprintf_(jstate, "\\\"");
+      break;
+    default:
+      if ((*inchar >= '\x01' && *inchar <= '\x1f') || *inchar < 0) {
+        jprintf_(jstate, "\\u00%2x", (unsigned char)*inchar);
+      } else {
+        jputc(jstate, *inchar);
+      }
     }
+    inchar++;
+  }
 }
 
-void
-jprint_bool (const char *key, int value, int is_last)
-{
-  jprintf_ (jstate,
-           "  \"%s\": %s%s\n",
-           key, value ? "true" : "false", is_last ? "" : ",");
+void jprint_bool(const char *key, int value, int is_last) {
+  jprintf_(jstate, "  \"%s\": %s%s\n", key, value ? "true" : "false",
+           is_last ? "" : ",");
 }
 
-void
-jprint_pointer (const char *key, const void *value, int is_last)
-{
-  if (value)
-    {
-      jprintf_ (jstate,
-               "  \"%s\": %p%s\n",
-               key, value, is_last ? "" : ",");
-    }
+void jprint_pointer(const char *key, const void *value, int is_last) {
+  if (value) {
+    jprintf_(jstate, "  \"%s\": %p%s\n", key, value, is_last ? "" : ",");
+  }
 }
 
 /*
    Print a key and an integer value.
    Add a comma unless it's the last element.
 */
-void
-jprint_unsigned_int (const char *key, unsigned int value, int is_last)
-{
-  jprintf_ (jstate,
-           "  \"%s\": %u%s\n",
-           key, value, is_last ? "" : ",");
+void jprint_unsigned_int(const char *key, unsigned int value, int is_last) {
+  jprintf_(jstate, "  \"%s\": %u%s\n", key, value, is_last ? "" : ",");
 }
 
 /* Print the json for a key and a string value.
    The string is escaped so that the result will be valid json.
    Add a comma unless it's the last element.
 */
-void
-jprint_string (const char *key, const char *value, int is_last)
-{
-  jprintf_ (jstate,
-           "  \"%s\": \"",
-           key);
-  print_escaped_string (value);
-  jprintf_ (jstate, "\"%s\n", is_last ? "" : ",");
+void jprint_string(const char *key, const char *value, int is_last) {
+  jprintf_(jstate, "  \"%s\": \"", key);
+  print_escaped_string(value);
+  jprintf_(jstate, "\"%s\n", is_last ? "" : ",");
 }
 
-void
-jprint_enum (const char *key, unsigned int value, int is_last)
-{
-  jprintf_ (jstate,
-           "  \"%s\": %u%s\n",
-           key, value, is_last ? "" : ",");
+void jprint_enum(const char *key, unsigned int value, int is_last) {
+  jprintf_(jstate, "  \"%s\": %u%s\n", key, value, is_last ? "" : ",");
 }
 
 /* hash table stats */
-void
-hash_jprint_stats (const char *key, struct hash_table *ht, int is_last)
-{
-  jprintf_ (jstate, "\"%s\": {\n", key);
-  jprintf_ (jstate,
-           "  \"load\": \"%lu/%lu=%.0f%%\",\n",
-           ht->ht_fill, ht->ht_size,
-           100.0 * (double)ht->ht_fill / (double)ht->ht_size);
-  jprintf_ (jstate,
-           "  \"rehash\": %u,\n",
-           ht->ht_rehashes);
-  jprintf_ (jstate,
-           "  \"collisions\": \"%lu/%lu=%.0f%%\"\n",
-           ht->ht_collisions, ht->ht_lookups,
+void hash_jprint_stats(const char *key, struct hash_table *ht, int is_last) {
+  jprintf_(jstate, "\"%s\": {\n", key);
+  jprintf_(jstate, "  \"load\": \"%lu/%lu=%.0f%%\",\n", ht->ht_fill,
+           ht->ht_size, 100.0 * (double)ht->ht_fill / (double)ht->ht_size);
+  jprintf_(jstate, "  \"rehash\": %u,\n", ht->ht_rehashes);
+  jprintf_(jstate, "  \"collisions\": \"%lu/%lu=%.0f%%\"\n", ht->ht_collisions,
+           ht->ht_lookups,
            (ht->ht_lookups
                 ? (100.0 * (double)ht->ht_collisions / (double)ht->ht_lookups)
                 : 0));
-  jprintf_ (jstate, "}%s\n", is_last ? "" : ",");
+  jprintf_(jstate, "}%s\n", is_last ? "" : ",");
 }
-
 
 /* Print variable V, prefixing it with PREFIX.  */
 
-static void
-jprint_variable (const void *item, void *arg)
-{
+static void jprint_variable(const void *item, void *arg) {
   const struct variable *v = item;
   const char *origin;
   jprint_state *state = (jprint_state *)arg;
 
-  switch (v->origin)
-    {
-    case o_automatic:
-      origin = _ ("automatic");
-      break;
-    case o_default:
-      origin = _ ("default");
-      break;
-    case o_env:
-      origin = _ ("environment");
-      break;
-    case o_file:
-      origin = _ ("makefile");
-      break;
-    case o_env_override:
-      origin = _ ("environment under -e");
-      break;
-    case o_command:
-      origin = _ ("command line");
-      break;
-    case o_override:
-      origin = _ ("'override' directive");
-      break;
-    case o_invalid:
-      abort ();
-    }
+  switch (v->origin) {
+  case o_automatic:
+    origin = _("automatic");
+    break;
+  case o_default:
+    origin = _("default");
+    break;
+  case o_env:
+    origin = _("environment");
+    break;
+  case o_file:
+    origin = _("makefile");
+    break;
+  case o_env_override:
+    origin = _("environment under -e");
+    break;
+  case o_command:
+    origin = _("command line");
+    break;
+  case o_override:
+    origin = _("'override' directive");
+    break;
+  case o_invalid:
+    abort();
+  }
 
-  if (state)
-    {
-      /* is first
-       * variable in
-       * a sequence
-       * so don't
-       * print a
-       * preceeding
-       * comma */
-      if (state->is_first)
-        {
-          state->is_first = 0;
-        }
-      else
-        {
-          jprintf_ (jstate, ",\n");
-        }
+  if (state) {
+    /* is first
+     * variable in
+     * a sequence
+     * so don't
+     * print a
+     * preceeding
+     * comma */
+    if (state->is_first) {
+      state->is_first = 0;
+    } else {
+      jprintf_(jstate, ",\n");
     }
-  jprintf_ (jstate,
-           "\"%s\" : {\n",
-           v->name);
-  jprintf_ (jstate,
-           "  \"origin\": \"%s\",\n",
-           origin);
-  jprintf_ (jstate,
-           "  \"private\": %s,\n",
-           v->private_var ? "true"
-                          : "false");
+  }
+  jprintf_(jstate, "\"%s\" : {\n", v->name);
+  jprintf_(jstate, "  \"origin\": \"%s\",\n", origin);
+  jprintf_(jstate, "  \"private\": %s,\n", v->private_var ? "true" : "false");
   if (v->fileinfo.filenm)
-    jprintf_ (jstate,
-             "  \"source\": \"%s\",\n  \"line\": %lu,\n",
+    jprintf_(jstate, "  \"source\": \"%s\",\n  \"line\": %lu,\n",
              v->fileinfo.filenm, v->fileinfo.lineno + v->fileinfo.offset);
 
   /* Is this a
    * 'define'?  */
-  if (v->recursive && strchr (v->value, '\n') != 0)
-    {
-      jprintf_ (jstate, "  \"define\": \"");
-      print_escaped_string (v->value);
-      jprintf_ (jstate, "\"\n");
-    }
-  else
-    {
-      jprintf_ (jstate,
-               "  \"%s%s\": \"",
-               v->append ? "append"
-                         : "assign",
-               v->recursive ? "-recursive"
-                            : "");
-      print_escaped_string (v->value);
-      jprintf_ (jstate, "\"");
-    }
-  jprintf_ (jstate, "\n}");
+  if (v->recursive && strchr(v->value, '\n') != 0) {
+    jprintf_(jstate, "  \"define\": \"");
+    print_escaped_string(v->value);
+    jprintf_(jstate, "\"\n");
+  } else {
+    jprintf_(jstate, "  \"%s%s\": \"", v->append ? "append" : "assign",
+             v->recursive ? "-recursive" : "");
+    print_escaped_string(v->value);
+    jprintf_(jstate, "\"");
+  }
+  jprintf_(jstate, "\n}");
 }
 
-static void
-jprint_auto_variable (const void *item, void *arg)
-{
+static void jprint_auto_variable(const void *item, void *arg) {
   const struct variable *v = item;
 
   if (v->origin == o_automatic)
-    jprint_variable (item, arg);
+    jprint_variable(item, arg);
 }
 
-static void
-jprint_noauto_variable (const void *item, void *arg)
-{
+static void jprint_noauto_variable(const void *item, void *arg) {
   const struct variable *v = item;
 
   if (v->origin != o_automatic)
-    jprint_variable (item, arg);
+    jprint_variable(item, arg);
 }
 
 /* Print all the
@@ -397,42 +325,35 @@ jprint_noauto_variable (const void *item, void *arg)
    (everything else
    is comments).  */
 
-void
-jprint_variable_set (const char *key, struct variable_set *set, int pauto,
-                     int is_last)
-{
+void jprint_variable_set(const char *key, struct variable_set *set, int pauto,
+                         int is_last) {
   jprint_state vstate;
   vstate = *jstate;
   vstate.is_first = 1;
 
-  if (!set)
-    {
-      return;
-    }
-  jprintf_ (jstate,
-           "  \"%s\": {\n",
-           key);
-  hash_map_arg (&set->table, (pauto ? jprint_auto_variable : jprint_variable),
-                (void *)&vstate);
+  if (!set) {
+    return;
+  }
+  jprintf_(jstate, "  \"%s\": {\n", key);
+  hash_map_arg(&set->table, (pauto ? jprint_auto_variable : jprint_variable),
+               (void *)&vstate);
   /* hash_jprint_stats
    * ("hash-table-stats",
    * &set->table,
    * 1); */
-  jprintf_ (jstate, "}%s\n", is_last ? "" : ",");
+  jprintf_(jstate, "}%s\n", is_last ? "" : ",");
 }
 
 /* Print the data
  * base of
  * variables.  */
 
-void
-jprint_variable_data_base (int is_last)
-{
-  jprintf_ (jstate, "\"variables\": {\n");
+void jprint_variable_data_base(int is_last) {
+  jprintf_(jstate, "\"variables\": {\n");
 
-  jprint_variable_set ("global", &global_variable_set, 0, 0);
+  jprint_variable_set("global", &global_variable_set, 0, 0);
 
-  jprintf_ (jstate, "\"pattern-specific-variables\" : {\n");
+  jprintf_(jstate, "\"pattern-specific-variables\" : {\n");
 
   {
     struct pattern_var *p;
@@ -444,21 +365,16 @@ jprint_variable_data_base (int is_last)
     jstate_.is_first = 1;
     jstate_.indent += 2;
 
-    for (p = pattern_vars; p != 0; p = p->next)
-      {
-        ++rules;
-        jprintf_ (&jstate_,
-                 "\n\"%s\" :\n",
-                 p->target);
-        jprint_variable (&p->variable, (void *)&jstate);
-      }
+    for (p = pattern_vars; p != 0; p = p->next) {
+      ++rules;
+      jprintf_(&jstate_, "\n\"%s\" :\n", p->target);
+      jprint_variable(&p->variable, (void *)&jstate);
+    }
 
-    jprintf_ (&jstate_, "\n},\n");
+    jprintf_(&jstate_, "\n},\n");
 
-    jprintf_ (&jstate_,
-             "  \"pattern-specific-rule-count\": %u\n",
-             rules);
-    jprintf_ (&jstate_, "}%s", is_last ? "" : ",");
+    jprintf_(&jstate_, "  \"pattern-specific-rule-count\": %u\n", rules);
+    jprintf_(&jstate_, "}%s", is_last ? "" : ",");
   }
 }
 
@@ -466,162 +382,134 @@ jprint_variable_data_base (int is_last)
  * local variables
  * of FILE.  */
 
-void
-jprint_file_variables (const char *key, const struct file *file, int is_last)
-{
+void jprint_file_variables(const char *key, const struct file *file,
+                           int is_last) {
   if (file->variables != 0)
-    jprint_variable_set (key, file->variables->set, 1, is_last);
+    jprint_variable_set(key, file->variables->set, 1, is_last);
 }
 
-void
-jprint_target_variables (const char *key, const struct file *file, int is_last)
-{
-  jprintf_ (jstate,
-           "  \"%s\": {\n",
-           key);
-  if (file->variables != 0)
-    {
-      size_t l = strlen (file->name);
-      char *t = alloca (l + 3);
+void jprint_target_variables(const char *key, const struct file *file,
+                             int is_last) {
+  jprintf_(jstate, "  \"%s\": {\n", key);
+  if (file->variables != 0) {
+    size_t l = strlen(file->name);
+    char *t = alloca(l + 3);
 
-      memcpy (t, file->name, l);
-      t[l] = ':';
-      t[l + 1] = ' ';
-      t[l + 2] = '\0';
+    memcpy(t, file->name, l);
+    t[l] = ':';
+    t[l + 1] = ' ';
+    t[l + 2] = '\0';
 
-      hash_map_arg (&file->variables->set->table, jprint_noauto_variable, t);
-    }
-  jprintf_ (jstate, "  }%s\n", is_last ? "" : ",");
+    hash_map_arg(&file->variables->set->table, jprint_noauto_variable, t);
+  }
+  jprintf_(jstate, "  }%s\n", is_last ? "" : ",");
 }
 
-void
-jprint_command_state (const char *key, unsigned int command_state, int update_status, int is_last)
-{
-  jprintf_ (jstate, "  \"%s\": ", key);
-  switch (command_state)
-    {
-    case cs_running:
-      jprintf_ (jstate, "\"cs_running\"");
+void jprint_command_state(const char *key, unsigned int command_state,
+                          int update_status, int is_last) {
+  jprintf_(jstate, "  \"%s\": ", key);
+  switch (command_state) {
+  case cs_running:
+    jprintf_(jstate, "\"cs_running\"");
+    break;
+  case cs_deps_running:
+    jprintf_(jstate, "\"cs_deps_running\"");
+    break;
+  case cs_not_started:
+    jprintf_(jstate, "\"cs_not_started\"");
+    break;
+  case cs_finished:
+    switch (update_status) {
+    case us_none:
+      jprintf_(jstate, "\"cs_finished\"");
       break;
-    case cs_deps_running:
-      jprintf_ (jstate, "\"cs_deps_running\"");
+    case us_success:
+      jprintf_(jstate, "\"cs_finished_success\"");
       break;
-    case cs_not_started:
-      jprintf_ (jstate, "\"cs_not_started\"");
+    case us_question:
+      assert(question_flag);
+      jprintf_(jstate, "\"cs_finished_needs_update\"");
       break;
-    case cs_finished:
-      switch (update_status)
-        {
-        case us_none:
-          jprintf_ (jstate, "\"cs_finished\"");
-          break;
-        case us_success:
-          jprintf_ (jstate, "\"cs_finished_success\"");
-          break;
-        case us_question:
-          assert(question_flag);
-          jprintf_ (jstate, "\"cs_finished_needs_update\"");
-          break;
-        case us_failed:
-          jprintf_ (jstate, "\"cs_finished_failed\"");
-          break;
-        default:
-          jprintf_ (jstate, "\"cs_finished_default\"");
-          break;
-        }
+    case us_failed:
+      jprintf_(jstate, "\"cs_finished_failed\"");
       break;
     default:
-      puts (_ ("#  Invalid value in 'command_state' member!"));
-      fflush (stdout);
-      fflush (stderr);
-      abort ();
+      jprintf_(jstate, "\"cs_finished_default\"");
+      break;
     }
-  jprintf_ (jstate, "%s\n", is_last ? "" : ",");
+    break;
+  default:
+    puts(_("#  Invalid value in 'command_state' member!"));
+    fflush(stdout);
+    fflush(stderr);
+    abort();
+  }
+  jprintf_(jstate, "%s\n", is_last ? "" : ",");
 }
 
-void
-jprint_deps (const char *key, struct dep *dependencies, int is_last)
-{
-  jprintf_ (jstate, "  \"%s\": ", key);
-  if (dependencies)
-    {
-      const struct dep *d;
-      jprintf_ (jstate, "[\n");
-      for (d = dependencies; d != 0; d = d->next)
-        {
-          jprintf_ (jstate, "     \"%s\"%s\n",
-                   dep_name (d), !d->next ? "" : ",");
-        }
-      jprintf_ (jstate, "]%s\n", is_last ? "" : ",");
+void jprint_deps(const char *key, struct dep *dependencies, int is_last) {
+  jprintf_(jstate, "  \"%s\": ", key);
+  if (dependencies) {
+    const struct dep *d;
+    jprintf_(jstate, "[\n");
+    for (d = dependencies; d != 0; d = d->next) {
+      jprintf_(jstate, "     \"%s\"%s\n", dep_name(d), !d->next ? "" : ",");
     }
-  else
-    {
-      jprintf_ (jstate, "  []%s\n", is_last ? "" : ",");
-    }
+    jprintf_(jstate, "]%s\n", is_last ? "" : ",");
+  } else {
+    jprintf_(jstate, "  []%s\n", is_last ? "" : ",");
+  }
 }
 
-void
-jprint_cmds (const char *key, struct commands *cmds, int is_last)
-{
+void jprint_cmds(const char *key, struct commands *cmds, int is_last) {
 
-  if (!cmds)
-    {
-      return;
-    }
+  if (!cmds) {
+    return;
+  }
 
-  jprintf_ (jstate,
-           "\"%s\" : {\n\"source\": ", key);
+  jprintf_(jstate, "\"%s\" : {\n\"source\": ", key);
 
   if (cmds->fileinfo.filenm == 0)
-    jprintf_ (jstate, "\"builtin\", ");
+    jprintf_(jstate, "\"builtin\", ");
   else
-    jprintf_ (jstate,
-             "\"%s\",\n \"line\": %lu,\n",
-             cmds->fileinfo.filenm, cmds->fileinfo.lineno);
+    jprintf_(jstate, "\"%s\",\n \"line\": %lu,\n", cmds->fileinfo.filenm,
+             cmds->fileinfo.lineno);
 
-  jprintf_ (jstate, "\"commands\": \"");
-  print_escaped_string (cmds->commands);
-  jprintf_ (jstate, "\"\n}%s\n", is_last ? "" : ",");
+  jprintf_(jstate, "\"commands\": \"");
+  print_escaped_string(cmds->commands);
+  jprintf_(jstate, "\"\n}%s\n", is_last ? "" : ",");
 }
 
-void
-jprint_file (const void *item, void *arg)
-{
+void jprint_file(const void *item, void *arg) {
   const struct file *f = item;
   jprint_state *state = (jprint_state *)arg;
 
   if (no_builtin_rules_flag && f->builtin)
     return;
 
-  if (state)
-    {
-      /* is first
-       * variable in
-       * a sequence
-       * so don't
-       * print a
-       * preceeding
-       * comma */
-      if (state->is_first)
-        {
-          state->is_first = 0;
-        }
-      else
-        {
-          jprintf_ (state, ",\n");
-        }
+  if (state) {
+    /* is first
+     * variable in
+     * a sequence
+     * so don't
+     * print a
+     * preceeding
+     * comma */
+    if (state->is_first) {
+      state->is_first = 0;
+    } else {
+      jprintf_(state, ",\n");
     }
+  }
 
-  jprintf_ (state,
-           "\"%s\" : {\n",
-           f->name);
-  jprint_string ("hname", f->hname, 0);
-  jprint_string ("vpath", f->vpath, 0);
-  jprint_deps ("deps", f->deps, 0);
-  jprint_cmds ("cmds", f->cmds, 0);
+  jprintf_(state, "\"%s\" : {\n", f->name);
+  jprint_string("hname", f->hname, 0);
+  jprint_string("vpath", f->vpath, 0);
+  jprint_deps("deps", f->deps, 0);
+  jprint_cmds("cmds", f->cmds, 0);
 
-  jprint_string ("stem", f->stem, 0);
-  jprint_deps ("also_make", f->also_make, 0);
+  jprint_string("stem", f->stem, 0);
+  jprint_deps("also_make", f->also_make, 0);
 
   /* print_pointer("prev",
   (const void
@@ -631,346 +519,292 @@ jprint_file (const void *item, void *arg)
   *)f->last, 0);
    */
 
-  if (f->renamed)
-    {
-      jprint_string ("renamed", f->renamed->name, 0);
-    }
-  jprint_file_variables ("variables", f, 0);
-  jprint_target_variables ("target-variables",
-                           f, 0);
-  if (f->pat_variables)
-    {
-      jprint_variable_set ("pattern_specific_variables",
-                           f->pat_variables->set, 0, 0);
-    }
-  if (f->parent)
-    {
-      jprint_string ("parent", f->parent->name, 0);
-    }
-  jprint_pointer ("double_colon", (const void *)f->double_colon, 0);
-  jprint_unsigned_int ("last_mtime", f->last_mtime, 0);
-  jprint_unsigned_int ("mtime_before_update", f->mtime_before_update, 0);
-  jprint_unsigned_int ("considered", f->considered, 0);
-  jprintf_ (jstate, "  \"command_flags\": %d,\n", f->command_flags);
-  jprint_enum ("update_status", f->update_status, 0);
-  jprint_command_state ("command_state", f->command_state, f->update_status, 0);
-  jprint_bool ("builtin", f->builtin, 0);
-  jprint_bool ("precious", f->precious, 0);
-  jprint_bool ("loaded", f->loaded, 0);
-  jprint_bool ("unloaded", f->unloaded, 0);
-  jprint_bool ("low_resolution_time", f->low_resolution_time, 0);
-  jprint_bool ("tried_implicit", f->tried_implicit, 0);
-  jprint_bool ("updating", f->updating, 0);
-  jprint_bool ("updated", f->updated, 0);
-  jprint_bool ("is_target", f->is_target, 0);
-  jprint_bool ("cmd_target", f->cmd_target, 0);
-  jprint_bool ("phony", f->phony, 0);
-  jprint_bool ("intermediate", f->intermediate, 0);
-  jprint_bool ("is_explicit", f->is_explicit, 0);
-  jprint_bool ("secondary", f->secondary, 0);
-  jprint_bool ("notintermediate", f->notintermediate, 0);
-  jprint_bool ("dontcare", f->dontcare, 0);
-  jprint_bool ("ignore_vpath", f->ignore_vpath, 0);
-  jprint_bool ("pat_searched", f->pat_searched, 0);
-  jprint_bool ("no_diag", f->no_diag, 0);
-  jprint_bool ("was_shuffled", f->was_shuffled, 0);
-  jprint_bool ("snapped", f->snapped, 1);
-  jprintf_ (jstate, "}\n");
+  if (f->renamed) {
+    jprint_string("renamed", f->renamed->name, 0);
+  }
+  jprint_file_variables("variables", f, 0);
+  jprint_target_variables("target-variables", f, 0);
+  if (f->pat_variables) {
+    jprint_variable_set("pattern_specific_variables", f->pat_variables->set, 0,
+                        0);
+  }
+  if (f->parent) {
+    jprint_string("parent", f->parent->name, 0);
+  }
+  jprint_pointer("double_colon", (const void *)f->double_colon, 0);
+  jprint_unsigned_int("last_mtime", f->last_mtime, 0);
+  jprint_unsigned_int("mtime_before_update", f->mtime_before_update, 0);
+  jprint_unsigned_int("considered", f->considered, 0);
+  jprintf_(jstate, "  \"command_flags\": %d,\n", f->command_flags);
+  jprint_enum("update_status", f->update_status, 0);
+  jprint_command_state("command_state", f->command_state, f->update_status, 0);
+  jprint_bool("builtin", f->builtin, 0);
+  jprint_bool("precious", f->precious, 0);
+  jprint_bool("loaded", f->loaded, 0);
+  jprint_bool("unloaded", f->unloaded, 0);
+  jprint_bool("low_resolution_time", f->low_resolution_time, 0);
+  jprint_bool("tried_implicit", f->tried_implicit, 0);
+  jprint_bool("updating", f->updating, 0);
+  jprint_bool("updated", f->updated, 0);
+  jprint_bool("is_target", f->is_target, 0);
+  jprint_bool("cmd_target", f->cmd_target, 0);
+  jprint_bool("phony", f->phony, 0);
+  jprint_bool("intermediate", f->intermediate, 0);
+  jprint_bool("is_explicit", f->is_explicit, 0);
+  jprint_bool("secondary", f->secondary, 0);
+  jprint_bool("notintermediate", f->notintermediate, 0);
+  jprint_bool("dontcare", f->dontcare, 0);
+  jprint_bool("ignore_vpath", f->ignore_vpath, 0);
+  jprint_bool("pat_searched", f->pat_searched, 0);
+  jprint_bool("no_diag", f->no_diag, 0);
+  jprint_bool("was_shuffled", f->was_shuffled, 0);
+  jprint_bool("snapped", f->snapped, 1);
+  jprintf_(jstate, "}\n");
 }
 
-void
-jprint_file_data_base (int is_last)
-{
+void jprint_file_data_base(int is_last) {
   jprint_state state;
   state = *jstate;
   state.is_first = 1;
   state.indent += 2;
 
-  jprintf_ (&state, "\n\"files\": {\n");
+  jprintf_(&state, "\n\"files\": {\n");
 
-  hash_map_arg (get_files (), jprint_file, (void *)&state);
+  hash_map_arg(get_files(), jprint_file, (void *)&state);
 
-  jprintf_ (&state, "\n}%s\n", is_last ? "" : ",");
+  jprintf_(&state, "\n}%s\n", is_last ? "" : ",");
   /* hash_jprint_stats("hash-table-stats", * get_files(), * 0); */
 }
 
-
-void 
-jprint_dir_data_base (int is_last)
-  {
-    unsigned int files;
-    unsigned int impossible;
-    struct directory **dir_slot;
-    struct directory **dir_end;
+void jprint_dir_data_base(int is_last) {
+  unsigned int files;
+  unsigned int impossible;
+  struct directory **dir_slot;
+  struct directory **dir_end;
+  int print_separator = 0;
 #if MK_OS_W32
-    char buf[INTSTR_LENGTH + 1];
+  char buf[INTSTR_LENGTH + 1];
 #endif
-    if (is_last) {
-        jprintf_(jstate,"");
-    }
+  if (is_last) {
+    jprintf_(jstate, "");
+  }
+  jprintf_(jstate, "\n\"directories\" : {\n");
+  files = impossible = 0;
+  dir_slot = (struct directory **)directories.ht_vec;
+  dir_end = dir_slot + directories.ht_size;
+  for (; dir_slot < dir_end; dir_slot++) {
+    struct directory *dir = *dir_slot;
+    if (!HASH_VACANT(dir)) {
+      /* Print a separator but only if we've already printed another directory
+       */
+      if (print_separator) {
+        jprintf_(jstate, ",\n");
+      }
 
-    jprintf_ (jstate, "\n\"directories\" : [\n");
-
-    files = impossible = 0;
-
-    dir_slot = (struct directory **)directories.ht_vec;
-    dir_end = dir_slot + directories.ht_size;
-    for (; dir_slot < dir_end; dir_slot++)
-      {
-        struct directory *dir = *dir_slot;
-        if (!HASH_VACANT (dir))
-          {
-            if (dir->contents == NULL)
-              printf (_ ("# %s: could not be stat'd.\n"), dir->name);
-            else if (dir->contents->dirfiles.ht_vec == NULL)
+      jprintf_(jstate, "\"%s\" : { ", dir->name);
+      if (dir->contents == NULL)
+        jprintf_(jstate, "\"status\":\"stat_fail\"");
+      else if (dir->contents->dirfiles.ht_vec == NULL) {
 #if MK_OS_W32
-              printf (
-                  _ ("# %s (key %s, mtime %s): could not be opened.\n"),
-                  dir->name, dir->contents->path_key,
-                  make_ulltoa ((unsigned long long)dir->contents->mtime, buf));
+        jprintf_(jstate,
+                 "\"status\":\"open_fail\", \"key\":\"%s\", "
+                 "\"mtime\":\"%s\"",
+                 dir->contents->path_key,
+                 make_ulltoa((unsigned long long)dir->contents->mtime, buf));
 #elif defined(VMS_INO_T)
-              printf (_ ("# %s (device %d, inode [%d,%d,%d]): could not be opened.\n"),
-                      dir->name, dir->contents->dev, dir->contents->ino[0],
-                      dir->contents->ino[1], dir->contents->ino[2]);
+        jprintf_(jstate,
+                 "\"status\":\"open_fail\", \"device\":%d, "
+                 "\"inode\":[%d,%d,%d]",
+                 dir->contents->dev, dir->contents->ino[0],
+                 dir->contents->ino[1], dir->contents->ino[2]);
 #else
-              printf (
-                  _ ("# %s (device %ld, inode %ld): could not be opened.\n"),
-                  dir->name, (long)dir->contents->dev,
-                  (long)dir->contents->ino);
+        jprintf_(jstate,
+                 "\"status\":\"open_fail\", \"device\":%ld, \"inode\":%ld",
+                 (long)dir->contents->dev, (long)dir->contents->ino);
 #endif
+      } else {
+        unsigned int f = 0;
+        unsigned int im = 0;
+        struct dirfile **files_slot;
+        struct dirfile **files_end;
+        files_slot = (struct dirfile **)dir->contents->dirfiles.ht_vec;
+        files_end = files_slot + dir->contents->dirfiles.ht_size;
+        for (; files_slot < files_end; files_slot++) {
+          struct dirfile *df = *files_slot;
+          if (!HASH_VACANT(df)) {
+            if (df->impossible)
+              ++im;
             else
-              {
-                unsigned int f = 0;
-                unsigned int im = 0;
-                struct dirfile **files_slot;
-                struct dirfile **files_end;
-
-                files_slot = (struct dirfile **)dir->contents->dirfiles.ht_vec;
-                files_end = files_slot + dir->contents->dirfiles.ht_size;
-                for (; files_slot < files_end; files_slot++)
-                  {
-                    struct dirfile *df = *files_slot;
-                    if (!HASH_VACANT (df))
-                      {
-                        if (df->impossible)
-                          ++im;
-                        else
-                          ++f;
-                      }
-                  }
+              ++f;
+          }
+        }
 #if MK_OS_W32
-                printf (_ ("# %s (key %s, mtime %s): "), dir->name,
-                        dir->contents->path_key,
-                        make_ulltoa ((unsigned long long)dir->contents->mtime,
-                                     buf));
+        jprintf_(jstate,
+                 "\"status\":\"ok\", \"key\":\"%s\", \"mtime\":\"%s\", "
+                 "\"files\":%u, "
+                 "\"impossibilities\":%u",
+                 dir->contents->path_key,
+                 make_ulltoa((unsigned long long)dir->contents->mtime, buf), f,
+                 im);
 #elif defined(VMS_INO_T)
-                printf (_ ("# %s (device %d, inode [%d,%d,%d]): "), dir->name,
-                        dir->contents->dev, dir->contents->ino[0],
-                        dir->contents->ino[1], dir->contents->ino[2]);
+        jprintf_(jstate,
+                 "\"status\":\"ok\", \"device\":%d, \"inode\":[%d,%d,%d], "
+                 "\"files\":%u, "
+                 "\"impossibilities\":%u",
+                 dir->contents->dev, dir->contents->ino[0],
+                 dir->contents->ino[1], dir->contents->ino[2], f, im);
 #else
-                printf (_ ("# %s (device %ld, inode %ld): "), dir->name,
-                        (long)dir->contents->dev, (long)dir->contents->ino);
+        jprintf_(
+            jstate,
+            "\"status\":\"ok\", \"device\":%ld, \"inode\":%ld, \"files\":%u, "
+            "\"impossibilities\":%u",
+            (long)dir->contents->dev, (long)dir->contents->ino, f, im);
 #endif
-                if (f == 0)
-                  fputs (_ ("No"), stdout);
-                else
-                  printf ("%u", f);
-                fputs (_ (" files, "), stdout);
-                if (im == 0)
-                  fputs (_ ("no"), stdout);
-                else
-                  printf ("%u", im);
-                fputs (_ (" impossibilities"), stdout);
-                if (dir->contents->dirstream == NULL)
-                  puts (".");
-                else
-                  puts (_ (" so far."));
-                files += f;
-                impossible += im;
-              }
-          }
+        files += f;
+        impossible += im;
       }
-
-    fputs ("\n# ", stdout);
-    if (files == 0)
-      fputs (_ ("No"), stdout);
-    else
-      printf ("%u", files);
-    fputs (_ (" files, "),
-           stdout);
-    if (impossible == 0)
-      fputs (_ ("no"), stdout);
-    else
-      printf ("%u", impossible);
-    printf (_ (" impossibilities in %lu directories.\n"),
-            directories.ht_fill);
-    jprintf_ (jstate, "    ], \n");
+      jprintf_(jstate, "}");
+      print_separator = 1;
+    }
   }
 
-  void jprint_rule (struct rule * r)
-  {
-    jprintf_ (jstate, "    { \n");
-    if (r->_defn == NULL)
-      {
-        unsigned int k;
-        const struct dep *dep, *ood = 0;
-        int is_first_dep = 1;
+  jprintf_(
+      jstate,
+      ",\n\"\" :{\"files\":%u, \"impossibilities\":%u, \"directories\":%lu}",
+      files, impossible, directories.ht_fill);
+  if (is_last) {
+    jprintf_(jstate, "\n    }\n");
+  } else {
+    jprintf_(jstate, "\n    },\n");
+  }
+}
 
-        jprintf_ (jstate, "    \"targets\" : [\n");
-        for (k = 0; k < r->num; ++k)
-          {
-            jprintf_ (jstate,
-                     "%s      \"%s\"",
-                     k == 0 ? "" : ",\n", r->targets[k]);
-          }
-        jprintf_ (jstate, "\n    ],\n");
+void jprint_rule(struct rule *r) {
+  jprintf_(jstate, "    { \n");
+  if (r->_defn == NULL) {
+    unsigned int k;
+    const struct dep *dep, *ood = 0;
+    int is_first_dep = 1;
 
-        if (r->terminal)
-          jprintf_ (jstate, "      \"terminal\" : true, \n");
+    jprintf_(jstate, "    \"targets\" : [\n");
+    for (k = 0; k < r->num; ++k) {
+      jprintf_(jstate, "%s      \"%s\"", k == 0 ? "" : ",\n", r->targets[k]);
+    }
+    jprintf_(jstate, "\n    ],\n");
 
-        /* print all
-         * normal
-         * dependencies;
-         * find
-         * first
-         * order-only
-         * dep.  */
-        jprintf_ (jstate, "      \"deps\" : [\n");
+    if (r->terminal)
+      jprintf_(jstate, "      \"terminal\" : true, \n");
 
-        for (dep = r->deps; dep; dep = dep->next)
-          {
-            if (dep->ignore_mtime == 0)
-              { /* not
-                   an order only dependency */
+    /* print all
+     * normal
+     * dependencies;
+     * find
+     * first
+     * order-only
+     * dep.  */
+    jprintf_(jstate, "      \"deps\" : [\n");
 
-                if (!is_first_dep)
-                  {
-                    jprintf_ (jstate, ",\n");
-                  }
-                else
-                  {
-                    is_first_dep = 0;
-                  }
-                if (dep->wait_here)
-                  {
-                    jprintf_ (jstate, "        \".WAIT\"");
-                  }
-                else
-                  {
-                    jprintf_ (jstate, "        \"%s\"", dep_name (dep));
-                  }
-              }
-            else if (ood == 0)
-              {
-                ood = dep; /* find the first OOD so we can process them next */
-              }
-          }
-        jprintf_ (jstate, "\n       ],\n");
+    for (dep = r->deps; dep; dep = dep->next) {
+      if (dep->ignore_mtime == 0) { /* not
+                                       an order only dependency */
 
-        jprintf_ (jstate, "\n      \"ood-deps\" : [\n");
-        /* print
-         * order-only
-         * deps, if
-         * we have
-         * any.  */
-        is_first_dep = 1;
-        for (; ood; ood = ood->next)
-          {
-            if (ood->ignore_mtime)
-              {
-                if (!is_first_dep)
-                  {
-                    jprintf_ (jstate, ",\n");
-                  }
-                else
-                  {
-                    is_first_dep = 0;
-                  }
-                if (ood->wait_here)
-                  {
-                    jprintf_ (jstate, "        \".WAIT\"");
-                  }
-                else
-                  {
-                    jprintf_ (jstate, "        \"%s\"", dep_name (ood));
-                  }
-              }
-          }
-        jprintf_ (jstate, "      ]");
+        if (!is_first_dep) {
+          jprintf_(jstate, ",\n");
+        } else {
+          is_first_dep = 0;
+        }
+        if (dep->wait_here) {
+          jprintf_(jstate, "        \".WAIT\"");
+        } else {
+          jprintf_(jstate, "        \"%s\"", dep_name(dep));
+        }
+      } else if (ood == 0) {
+        ood = dep; /* find the first OOD so we can process them next */
       }
+    }
+    jprintf_(jstate, "\n       ],\n");
 
-    if (r->cmds != 0)
-      {
-        jprintf_ (jstate, ",\n");
-        jprint_cmds ("cmds", r->cmds, 1);
+    jprintf_(jstate, "\n      \"ood-deps\" : [\n");
+    /* print
+     * order-only
+     * deps, if
+     * we have
+     * any.  */
+    is_first_dep = 1;
+    for (; ood; ood = ood->next) {
+      if (ood->ignore_mtime) {
+        if (!is_first_dep) {
+          jprintf_(jstate, ",\n");
+        } else {
+          is_first_dep = 0;
+        }
+        if (ood->wait_here) {
+          jprintf_(jstate, "        \".WAIT\"");
+        } else {
+          jprintf_(jstate, "        \"%s\"", dep_name(ood));
+        }
       }
-    else
-      {
-        jprintf_ (jstate, "\n");
-      }
-    jprintf_ (jstate, "    } \n");
+    }
+    jprintf_(jstate, "      ]");
   }
 
-  void jprint_rule_data_base (int is_last)
-  {
-    unsigned int rules, terminal;
-    struct rule *r;
-    /* unsigned int
-     * num_pattern_rules
-     * =
-     * get_num_pattern_rules();
-     */
+  if (r->cmds != 0) {
+    jprintf_(jstate, ",\n");
+    jprint_cmds("cmds", r->cmds, 1);
+  } else {
+    jprintf_(jstate, "\n");
+  }
+  jprintf_(jstate, "    } \n");
+}
 
-    jprintf_ (jstate, "\n\"rules\": {");
-    jprintf_ (jstate, "\n  \"implicit-rules\": [\n");
+void jprint_rule_data_base(int is_last) {
+  unsigned int rules, terminal;
+  struct rule *r;
+  /* unsigned int
+   * num_pattern_rules
+   * =
+   * get_num_pattern_rules();
+   */
 
-    rules = terminal = 0;
-    for (r = pattern_rules; r != 0; r = r->next)
-      {
-        if (rules != 0)
-          {
-            jprintf_ (jstate, ",\n");
-          }
-        ++rules;
+  jprintf_(jstate, "\n\"rules\": {");
+  jprintf_(jstate, "\n  \"implicit-rules\": [\n");
 
-        jprint_rule (r);
+  rules = terminal = 0;
+  for (r = pattern_rules; r != 0; r = r->next) {
+    if (rules != 0) {
+      jprintf_(jstate, ",\n");
+    }
+    ++rules;
 
-        if (r->terminal)
-          ++terminal;
-      }
+    jprint_rule(r);
 
-    jprintf_ (jstate,
-             "\n],\n \"terminal-rules-count\" : %u\n",
-             terminal);
-    jprintf_ (jstate, "}%s\n", is_last ? "" : ",");
-
-    if (num_pattern_rules != rules)
-      {
-        /* 
-	 This can happen if a fatal error was detected while reading the
-	 makefiles and thus count_implicit_rule_limits wasn't called
-	 yet.
-	*/
-        if (num_pattern_rules != 0)
-          ONN (fatal, NILF,
-               "INTERNAL: num_pattern_rules is wrong!  %u != %u",
-               num_pattern_rules, rules);
-      }
+    if (r->terminal)
+      ++terminal;
   }
 
-  void jprint_vpath_data_base (int is_last)
-  {
-    /* not  implemented  yet */
-    jprintf_ (jstate,
-             "\n\"vpath\": []%s\n",
-             is_last ? "" : ",");
-  }
+  jprintf_(jstate, "\n],\n \"terminal-rules-count\" : %u\n", terminal);
+  jprintf_(jstate, "}%s\n", is_last ? "" : ",");
 
-  void jstrcache_print_stats (const char *p)
-  {
-    /* not implemented yet */
-    jprintf_ (jstate, "%s",
-             p ? "" : ""); /* prevent unused parameter wanrnings */
+  if (num_pattern_rules != rules) {
+    /*
+     This can happen if a fatal error was detected while reading the
+     makefiles and thus count_implicit_rule_limits wasn't called
+     yet.
+    */
+    if (num_pattern_rules != 0)
+      ONN(fatal, NILF, "INTERNAL: num_pattern_rules is wrong!  %u != %u",
+          num_pattern_rules, rules);
   }
+}
 
-  /* EOF */
+void jprint_vpath_data_base(int is_last) {
+  /* not  implemented  yet */
+  jprintf_(jstate, "\n\"vpath\": []%s\n", is_last ? "" : ",");
+}
+
+void jstrcache_print_stats(const char *p) {
+  /* not implemented yet */
+  jprintf_(jstate, "%s", p ? "" : ""); /* prevent unused parameter wanrnings */
+}
+
+/* EOF */

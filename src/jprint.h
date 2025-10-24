@@ -39,8 +39,7 @@ void jprint_target_variables(const char *key, const struct file *file,
                              int is_last);
 
 void jprint_command_state(const char *key, unsigned int command_state,
-                          int update_status,
-                          int is_last);
+                          int update_status, int is_last);
 void jprint_deps(const char *key, struct dep *dependencies, int is_last);
 void jprint_file(const void *item, void *arg);
 
@@ -50,6 +49,5 @@ void jprint_dir_data_base(int is_last);
 void jprint_rule_data_base(int is_last);
 void jprint_vpath_data_base(int is_last);
 void jstrcache_print_stats(const char *);
-
 
 #endif /* _JPRINT_H_ */
