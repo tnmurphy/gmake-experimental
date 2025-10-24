@@ -20,6 +20,8 @@ with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/file.h>
+#include <fcntl.h>
 
 #include "commands.h"
 #include "dep.h"
@@ -32,6 +34,11 @@ with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "jprint.h"
 #include <assert.h>
 
+/*
+  A structure that's used as a singleton to keep all the state needed
+  for the output of json data.  It includes things like the current
+  indent level and the file handle where json output is to be written.
+*/
 typedef struct
 {
   int is_first;
@@ -44,11 +51,68 @@ typedef struct
 jprint_state global_jstate;
 jprint_state *jstate = &global_jstate;
 
+/*
+  Opens the file into which this make instance's json output will go. 
+  The point here is that as a side effect the file handle is put into the
+  state singleton for use by all the other printing functions.
+*/
 FILE *jopen(char filename[])
 {
   jstate->json_file = fopen(filename, "w");
 
   return jstate->json_file;
+}
+
+/*
+   Write an index of all the json files that were created to make it easier to
+   go back and reassemble a build
+*/
+int jappend_to_index(const char *index_filename, const char *jsonfilename) {
+    int fd;
+    int retries = 5;
+    int retry_delay_ms = 100;
+    ssize_t written = 0;
+
+    while (retries-- > 0) {
+        fd = open(index_filename, O_WRONLY | O_APPEND | O_CREAT, 0644);
+        if (fd == -1) {
+            perror("open");
+            return -1;
+        }
+
+        // Try to get an exclusive lock
+        if (flock(fd, LOCK_EX | LOCK_NB) == -1) {
+            if (errno == EWOULDBLOCK) {
+                // Lock is held by another process, wait and retry
+                close(fd);
+                usleep(retry_delay_ms * 1000);
+                continue;
+            } else {
+                perror("flock");
+                close(fd);
+                return -1;
+            }
+        }
+
+        // Got the lock, write the filename
+        written = write(fd, jsonfilename, strlen(jsonfilename));
+        if (written == -1) {
+            perror("write");
+            flock(fd, LOCK_UN);
+            close(fd);
+            return -1;
+        }
+        // Write a newline
+        write(fd, "\n", 1);
+
+        // Release the lock and close the file
+        flock(fd, LOCK_UN);
+        close(fd);
+        return 0;
+    }
+
+    fprintf(stderr, "Failed to acquire json index file lock after retries\n");
+    return -1;
 }
 
 
@@ -159,6 +223,10 @@ jprint_pointer (const char *key, const void *value, int is_last)
     }
 }
 
+/*
+   Print a key and an integer value.
+   Add a comma unless it's the last element.
+*/
 void
 jprint_unsigned_int (const char *key, unsigned int value, int is_last)
 {
@@ -167,6 +235,10 @@ jprint_unsigned_int (const char *key, unsigned int value, int is_last)
            key, value, is_last ? "" : ",");
 }
 
+/* Print the json for a key and a string value.
+   The string is escaped so that the result will be valid json.
+   Add a comma unless it's the last element.
+*/
 void
 jprint_string (const char *key, const char *value, int is_last)
 {
@@ -423,7 +495,7 @@ jprint_target_variables (const char *key, const struct file *file, int is_last)
 }
 
 void
-jprint_command_state (const char *key, unsigned int command_state, int is_last)
+jprint_command_state (const char *key, unsigned int command_state, int update_status, int is_last)
 {
   jprintf_ (jstate, "  \"%s\": ", key);
   switch (command_state)
@@ -438,25 +510,25 @@ jprint_command_state (const char *key, unsigned int command_state, int is_last)
       jprintf_ (jstate, "\"cs_not_started\"");
       break;
     case cs_finished:
-      jprintf_ (jstate, "\"cs_not_finished\"");
-      /*
-      switch
-      (f->update_status)
+      switch (update_status)
         {
         case us_none:
+          jprintf_ (jstate, "\"cs_finished\"");
           break;
         case us_success:
-          puts (_("# Successfully updated."));
+          jprintf_ (jstate, "\"cs_finished_success\"");
           break;
         case us_question:
           assert(question_flag);
-          puts (_("# Needs to be updated (-q is set)."));
+          jprintf_ (jstate, "\"cs_finished_needs_update\"");
           break;
-        case
-      us_failed:
-          puts (_("# Failed to be updated."));
+        case us_failed:
+          jprintf_ (jstate, "\"cs_finished_failed\"");
           break;
-        }*/
+        default:
+          jprintf_ (jstate, "\"cs_finished_default\"");
+          break;
+        }
       break;
     default:
       puts (_ ("#  Invalid value in 'command_state' member!"));
@@ -581,7 +653,7 @@ jprint_file (const void *item, void *arg)
   jprint_unsigned_int ("considered", f->considered, 0);
   jprintf_ (jstate, "  \"command_flags\": %d,\n", f->command_flags);
   jprint_enum ("update_status", f->update_status, 0);
-  jprint_command_state ("command_state", f->command_state, 0);
+  jprint_command_state ("command_state", f->command_state, f->update_status, 0);
   jprint_bool ("builtin", f->builtin, 0);
   jprint_bool ("precious", f->precious, 0);
   jprint_bool ("loaded", f->loaded, 0);

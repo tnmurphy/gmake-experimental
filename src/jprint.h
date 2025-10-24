@@ -21,6 +21,7 @@ struct dep;
 struct commands;
 
 FILE *jopen(char filename[]);
+int jappend_to_index(const char *index_filename, const char *jsonfilename);
 int jprintf(const char *fmt, ...);
 void print_escaped_string(const char *input);
 
@@ -38,6 +39,7 @@ void jprint_target_variables(const char *key, const struct file *file,
                              int is_last);
 
 void jprint_command_state(const char *key, unsigned int command_state,
+                          int update_status,
                           int is_last);
 void jprint_deps(const char *key, struct dep *dependencies, int is_last);
 void jprint_file(const void *item, void *arg);

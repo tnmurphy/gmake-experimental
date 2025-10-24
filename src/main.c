@@ -3907,13 +3907,23 @@ die (int status)
       if (print_data_base_flag)
         print_data_base ();
       else if (print_data_base_json_flag) {
-	char jsonfilename[GET_PATH_MAX];
-	FILE *json_file;
+        char jsonfilename[GET_PATH_MAX];
+        char indexfilename[GET_PATH_MAX];
+        FILE *json_file;
+        const char *filename_base = (char *)0;
+ 
+        filename_base = getenv ("MAKE_JSON_BASE");
+        if (!filename_base) {
+            filename_base = "makefile";
+        }
+
 	printf("Writing database to json file");
-	snprintf(jsonfilename, GET_PATH_MAX-1, "makefile-%d.json", (int)getpid());
+	snprintf(jsonfilename, GET_PATH_MAX-1, "%s-%d.json", filename_base, (int)getpid());
         json_file = jopen(jsonfilename);
 	if (json_file) {
             print_data_base_json();
+	    snprintf(indexfilename, GET_PATH_MAX-1, "%s.idx", filename_base);
+            jappend_to_index(indexfilename, jsonfilename);
 	} else {
             fprintf(stderr, "file open returned %d", errno);
 	}
