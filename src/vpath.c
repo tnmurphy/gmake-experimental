@@ -15,36 +15,20 @@ You should have received a copy of the GNU General Public License along with
 this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include "makeint.h"
-#include "filedef.h"
-#include "variable.h"
-#if MK_OS_W32
-#include "pathstuff.h"
-#endif
-
-
-/* Structure used to represent a selective VPATH searchpath.  */
-
-struct vpath
-  {
-    struct vpath *next;      /* Pointer to next struct in the linked list.  */
-    const char *pattern;     /* The pattern to match.  */
-    const char *percent;     /* Pointer into 'pattern' where the '%' is.  */
-    size_t patlen;           /* Length of the pattern.  */
-    const char **searchpath; /* Null-terminated list of directories.  */
-    size_t maxlen;           /* Maximum length of any entry in the list.  */
-  };
+#include "vpath.h"
 
 /* Linked-list of all selective VPATHs.  */
 
-static struct vpath *vpaths;
+struct vpath *vpaths;
 
 /* Structure for the general VPATH given in the variable.  */
 
-static struct vpath *general_vpath;
+struct vpath *general_vpath;
 
 /* Structure for GPATH given in the variable.  */
 
-static struct vpath *gpaths;
+struct vpath *gpaths;
+
 
 
 /* Reverse the chain of selective VPATH lists so they will be searched in the

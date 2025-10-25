@@ -3828,9 +3828,9 @@ print_data_base_json (void)
   jprint_variable_data_base (0);
   jprint_dir_data_base (0);
   jprint_rule_data_base (0);
-  jprint_file_data_base (1);
-  /*jprint_vpath_data_base ();
-   jstrcache_print_stats ("#"); */
+  jprint_file_data_base (0);
+  jprint_vpath_data_base (0);
+  jstrcache_print_stats ("#", 1);
   jprintf("}\n}\n");
 
   /* file_timestamp_sprintf (buf, file_timestamp_now (&resolution));

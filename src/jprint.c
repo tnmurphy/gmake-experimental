@@ -30,6 +30,7 @@ with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "hash.h"
 #include "rule.h"
 #include "variable.h"
+#include "vpath.h"
 
 #include "jprint.h"
 #include <assert.h>
@@ -797,14 +798,54 @@ void jprint_rule_data_base(int is_last) {
   }
 }
 
-void jprint_vpath_data_base(int is_last) {
   /* not  implemented  yet */
-  jprintf_(jstate, "\n\"vpath\": []%s\n", is_last ? "" : ",");
+  /* jprintf_(jstate, "\n\"vpath\": []%s\n", is_last ? "" : ","); */
+
+void jprint_vpath_data_base(int is_last) {
+  unsigned int nvpaths;
+  struct vpath *v;
+
+  jprintf_(jstate, "\n\"vpath\": {\n\"paths\": {"); 
+
+  nvpaths = 0;
+  for (v = vpaths; v != 0; v = v->next) {
+    unsigned int i;
+    ++nvpaths;
+    jprintf_(jstate, "\"%s\": [", v->pattern);
+    for (i = 0; v->searchpath[i] != 0; ++i) {
+      jprintf_(jstate, "\"%s\"", v->searchpath[i]);
+      if (v->searchpath[i+1]) {
+        jprintf_(jstate, ", ");
+      }
+    }
+    jprintf_(jstate, "]\n");
+    if (v->next) {
+      jprintf_(jstate, ",");
+    }
+  }
+  jprintf_(jstate, "},\n");
+
+  jprintf_(jstate, "\"vpaths\" : %d, \"nvpaths\": %d \n");
+
+  jprintf_(jstate, ", \"general_vpath\": [\n");
+  if (general_vpath != 0) {
+    const char **path = general_vpath->searchpath;
+    unsigned int i;
+    for (i = 0; path[i] != 0; ++i) {
+      jprintf_(jstate, "\"%s\"", path[i]);
+      if (path[i+1]) {
+        jprintf_(jstate, ", ");
+      }
+    }
+  }
+  jprintf_(jstate, "]\n}%s\n", is_last ? "" : ","); 
 }
 
-void jstrcache_print_stats(const char *p) {
+
+void jstrcache_print_stats(const char *p, int is_last) {
   /* not implemented yet */
-  jprintf_(jstate, "%s", p ? "" : ""); /* prevent unused parameter wanrnings */
+  jprintf_(jstate, "\"stats\": {\"%s\" : \"\"", p); /* prevent unused parameter wanrnings */
+  jprintf_(jstate, "}%s\n", is_last ? "" : ","); 
 }
 
 /* EOF */
