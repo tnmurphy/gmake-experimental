@@ -524,7 +524,7 @@ void jprint_file(const void *item, void *arg) {
     jprint_string("renamed", f->renamed->name, 0);
   }
   jprint_file_variables("variables", f, 0);
-  jprint_target_variables("target-variables", f, 0);
+  jprint_target_variables("target_variables", f, 0);
   if (f->pat_variables) {
     jprint_variable_set("pattern_specific_variables", f->pat_variables->set, 0,
                         0);
