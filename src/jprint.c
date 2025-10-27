@@ -339,7 +339,7 @@ void jprint_variable_set(const char *key, struct variable_set *set, int pauto,
   hash_map_arg(&set->table, (pauto ? jprint_auto_variable : jprint_variable),
                (void *)&vstate);
   /* hash_jprint_stats
-   * ("hash-table-stats",
+   * ("hash_table_stats",
    * &set->table,
    * 1); */
   jprintf_(jstate, "}%s\n", is_last ? "" : ",");
@@ -354,7 +354,7 @@ void jprint_variable_data_base(int is_last) {
 
   jprint_variable_set("global", &global_variable_set, 0, 0);
 
-  jprintf_(jstate, "\"pattern-specific-variables\" : {\n");
+  jprintf_(jstate, "\"pattern_specific_variables\" : {\n");
 
   {
     struct pattern_var *p;
@@ -374,7 +374,7 @@ void jprint_variable_data_base(int is_last) {
 
     jprintf_(&jstate_, "\n},\n");
 
-    jprintf_(&jstate_, "  \"pattern-specific-rule-count\": %u\n", rules);
+    jprintf_(&jstate_, "  \"pattern_specific_rule_count\": %u\n", rules);
     jprintf_(&jstate_, "}%s", is_last ? "" : ",");
   }
 }
@@ -574,7 +574,7 @@ void jprint_file_data_base(int is_last) {
   hash_map_arg(get_files(), jprint_file, (void *)&state);
 
   jprintf_(&state, "\n}%s\n", is_last ? "" : ",");
-  /* hash_jprint_stats("hash-table-stats", * get_files(), * 0); */
+  /* hash_jprint_stats("hash_table_stats", * get_files(), * 0); */
 }
 
 void jprint_dir_data_base(int is_last) {
@@ -725,7 +725,7 @@ void jprint_rule(struct rule *r) {
     }
     jprintf_(jstate, "\n       ],\n");
 
-    jprintf_(jstate, "\n      \"ood-deps\" : [\n");
+    jprintf_(jstate, "\n      \"ood_deps\" : [\n");
     /* print
      * order-only
      * deps, if
@@ -768,7 +768,7 @@ void jprint_rule_data_base(int is_last) {
    */
 
   jprintf_(jstate, "\n\"rules\": {");
-  jprintf_(jstate, "\n  \"implicit-rules\": [\n");
+  jprintf_(jstate, "\n  \"implicit_rules\": [\n");
 
   rules = terminal = 0;
   for (r = pattern_rules; r != 0; r = r->next) {
@@ -783,7 +783,7 @@ void jprint_rule_data_base(int is_last) {
       ++terminal;
   }
 
-  jprintf_(jstate, "\n],\n \"terminal-rules-count\" : %u\n", terminal);
+  jprintf_(jstate, "\n],\n \"terminal_rules_count\" : %u\n", terminal);
   jprintf_(jstate, "}%s\n", is_last ? "" : ",");
 
   if (num_pattern_rules != rules) {
