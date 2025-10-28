@@ -48,6 +48,7 @@ void jprint_file_data_base(int is_last);
 void jprint_dir_data_base(int is_last);
 void jprint_rule_data_base(int is_last);
 void jprint_vpath_data_base(int is_last);
-void jstrcache_print_stats(const char *, int is_last);
+void jstrcache_print_stats(int is_last);
+
 
 #endif /* _JPRINT_H_ */

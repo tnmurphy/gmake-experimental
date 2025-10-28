@@ -262,44 +262,89 @@ strcache_init (void)
 
 /* Generate some stats output.  */
 
-void
-strcache_print_stats (const char *prefix)
-{
+int
+strcache_get_stats (
+      unsigned long *numbuffs, 
+      unsigned long *fullbuffs, 
+      unsigned long *totfree,
+      unsigned long *maxfree,
+      unsigned long *minfree,
+      unsigned long *total_strings_,
+      unsigned long *total_size_,
+      unsigned long *end,
+      unsigned long *count,
+      unsigned long *bufsize,
+      unsigned long *total_adds_
+      ) {
   const struct strcache *sp;
-  unsigned long numbuffs = 0, fullbuffs = 0;
-  unsigned long totfree = 0, maxfree = 0, minfree = BUFSIZE;
 
-  if (! strcache)
-    {
-      printf (_("\n%s No strcache buffers\n"), prefix);
-      return;
-    }
+  *numbuffs = 0; 
+  *fullbuffs = 0;
+  *totfree = 0; 
+  *maxfree = 0;
+  *minfree = BUFSIZE;
+
+  *total_strings_ = total_strings;
+  *total_size_ = total_size;
+  *end = strcache->end;
+  *count = strcache->count;
+  *bufsize = (sc_buflen_t)BUFSIZE;
+  *total_adds_ = total_adds;
+
+  if (! strcache) {
+      return 0;
+  }
 
   /* Count the first buffer separately since it's not full.  */
   for (sp = strcache->next; sp != NULL; sp = sp->next)
     {
       sc_buflen_t bf = sp->bytesfree;
 
-      totfree += bf;
-      maxfree = (bf > maxfree ? bf : maxfree);
-      minfree = (bf < minfree ? bf : minfree);
+      *totfree += bf;
+      *maxfree = (bf > *maxfree ? bf : *maxfree);
+      *minfree = (bf < *minfree ? bf : *minfree);
 
-      ++numbuffs;
+      ++(*numbuffs);
     }
   for (sp = fullcache; sp != NULL; sp = sp->next)
     {
       sc_buflen_t bf = sp->bytesfree;
 
       totfree += bf;
-      maxfree = (bf > maxfree ? bf : maxfree);
-      minfree = (bf < minfree ? bf : minfree);
+      *maxfree = (bf > *maxfree ? bf : *maxfree);
+      *minfree = (bf < *minfree ? bf : *minfree);
 
-      ++numbuffs;
-      ++fullbuffs;
+      ++(*numbuffs);
+      ++(*fullbuffs);
     }
 
   /* Make sure we didn't lose any buffers.  */
-  assert (total_buffers == numbuffs + 1);
+  assert (total_buffers == *numbuffs + 1);
+  return 1;
+}
+
+void
+strcache_print_stats (const char *prefix)
+{
+    unsigned long numbuffs, fullbuffs;
+    unsigned long totfree, maxfree, minfree;
+    unsigned long total_strings_, total_size_;
+    unsigned long end, count, bufsize, total_adds_;
+ 
+    /* we're not really using the global variable substitutes - they're really there for jprint */ 
+    strcache_get_stats (
+        &numbuffs, 
+        &fullbuffs,
+        &totfree,
+        &maxfree,
+        &minfree,
+        &total_strings_,
+        &total_size_,
+        &end,
+        &count,
+        &bufsize,
+        &total_adds_
+        );
 
   printf (_("\n%s strcache buffers: %lu (%lu) / strings = %lu / storage = %lu B / avg = %lu B\n"),
           prefix, numbuffs + 1, fullbuffs, total_strings, total_size,

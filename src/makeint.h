@@ -655,6 +655,19 @@ void show_goal_error (void);
 
 /* String caching  */
 void strcache_init (void);
+int strcache_get_stats (
+      unsigned long *numbuffs, 
+      unsigned long *fullbuffs, 
+      unsigned long *totfree,
+      unsigned long *maxfree,
+      unsigned long *minfree,
+      unsigned long *total_strings_,
+      unsigned long *total_size_,
+      unsigned long *end,
+      unsigned long *count,
+      unsigned long *bufsize,
+      unsigned long *total_adds
+      );
 void strcache_print_stats (const char *prefix);
 int strcache_iscached (const char *str);
 const char *strcache_add (const char *str);

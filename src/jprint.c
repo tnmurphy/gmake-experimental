@@ -206,6 +206,10 @@ void jprint_unsigned_int(const char *key, unsigned int value, int is_last) {
   jprintf_(jstate, "  \"%s\": %u%s\n", key, value, is_last ? "" : ",");
 }
 
+void jprint_unsigned_long(const char *key, unsigned long value, int is_last) {
+  jprintf_(jstate, "  \"%s\": %lu%s\n", key, value, is_last ? "" : ",");
+}
+
 /* Print the json for a key and a string value.
    The string is escaped so that the result will be valid json.
    Add a comma unless it's the last element.
@@ -842,10 +846,68 @@ void jprint_vpath_data_base(int is_last) {
 }
 
 
-void jstrcache_print_stats(const char *p, int is_last) {
-  /* not implemented yet */
-  jprintf_(jstate, "\"stats\": {\"%s\" : \"\"", p); /* prevent unused parameter wanrnings */
-  jprintf_(jstate, "}%s\n", is_last ? "" : ","); 
-}
+/* Generate some stats output.  */
 
-/* EOF */
+void
+jstrcache_print_stats (int is_last)
+{
+    unsigned long numbuffs, fullbuffs;
+    unsigned long totfree, maxfree, minfree;
+    unsigned long total_strings, total_size;
+    unsigned long end, count, bufsize, total_adds;
+  
+    strcache_get_stats (
+        &numbuffs, 
+        &fullbuffs,
+        &totfree,
+        &maxfree,
+        &minfree,
+        &total_strings,
+        &total_size,
+        &end,
+        &count,
+        &bufsize,
+        &total_adds
+        );
+
+    jprintf_ (jstate, "\"strcachestats\": {\n");
+    jprintf_ (jstate, "\"buffers\": {\n");
+    jprint_unsigned_long("count", numbuffs+1, 0);
+    jprint_unsigned_long("full", fullbuffs, 0);
+    jprint_unsigned_long("total_strings", total_strings, 0);
+    jprint_unsigned_long("total_size", total_size, 0);
+    jprint_unsigned_long("average_size", (total_size / total_strings), 1);
+    jprintf_ (jstate, "},\n");
+    
+    jprintf_ (jstate, "\"current_buffer\": {\n");
+    jprint_unsigned_long("bufsize", bufsize, 0);
+    jprint_unsigned_long("used", end, 0);
+    jprint_unsigned_long("count", count, 0);
+    jprint_unsigned_long("average", (unsigned int) (end / count), 1);
+    jprintf_ (jstate, "},\n");
+    
+    if (numbuffs)
+    {
+        /* Show information about non-current buffers. */
+        unsigned long sz = total_size - end;
+        unsigned long cnt = total_strings - count;
+        unsigned long avgfree = (totfree / numbuffs);
+    
+        jprintf_ (jstate, "  \"other_buffers\": {\n");
+        jprint_unsigned_long("size", sz, 0);
+        jprint_unsigned_long("count", cnt, 0);
+        jprint_unsigned_long("average", sz / cnt, 0);
+    
+        jprint_unsigned_long("totfree", totfree, 0);
+        jprint_unsigned_long("maxfree", maxfree, 0);
+        jprint_unsigned_long("minfree", minfree, 0);
+        jprint_unsigned_long("avgfree", avgfree, 1);
+        jprintf_ (jstate, "  },\n");
+    }
+    
+    jprintf_ (jstate, "  \"performance\": {\n");
+    jprint_unsigned_long("total_adds", total_adds, 0);
+    jprint_unsigned_long("hit_rate", (long unsigned)(100.0 * (total_adds - total_strings) / total_adds), 1);
+    jprintf_ (jstate, "  }\n");
+    jprintf_ (jstate, "}%s\n", is_last ? "" : ",");
+}
