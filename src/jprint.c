@@ -29,9 +29,9 @@ with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "filedef.h"
 #include "hash.h"
 #include "rule.h"
+#include "strcache.h"
 #include "variable.h"
 #include "vpath.h"
-#include "strcache.h"
 
 #include "jprint.h"
 #include <assert.h>
@@ -40,6 +40,10 @@ with this program.  If not, see <https://www.gnu.org/licenses/>.
   A structure that's used as a singleton to keep all the state needed
   for the output of json data.  It includes things like the current
   indent level and the file handle where json output is to be written.
+
+  The indentation scheme is incomplete and a bit of a mess because it 
+  has been easier to just use jq on the output but it might be worth
+  sorting this out when everything else is done.
 */
 typedef struct {
   int is_first;
@@ -114,9 +118,14 @@ int jappend_to_index(const char *index_filename, const char *jsonfilename) {
   return -1;
 }
 
+
+/* A customised printf for outputing json. The state parameter
+   allows it to know which file to write to but it could be 
+   used to enable automatic indentation for example.
+*/
+
+/* this one assumes the state variable */
 int jprintf(const char *fmt, ...) {
-  // initializing
-  // list pointer
   va_list args;
   va_start(args, fmt);
   vfprintf(jstate->json_file, fmt, args);
@@ -125,6 +134,8 @@ int jprintf(const char *fmt, ...) {
   return 0;
 }
 
+/* this one lets you supply the state which is handy when 
+one wants to temporarily change the state */
 int jprintf_(jprint_state *jstate_, const char *fmt, ...) {
   // initializing
   // list pointer
@@ -140,6 +151,8 @@ int jputc(jprint_state *jstate_, const char c) {
   return fputc(c, jstate_->json_file);
 }
 
+/* Escape characters in the string so that it is can be 
+   used within quotes in json as a valid json string */
 void print_escaped_string(const char *input) {
   const char *inchar = input;
   if (!input) {
@@ -230,12 +243,12 @@ void jprint_hash_stats(const char *key, struct hash_table *ht, int is_last) {
   jprintf_(jstate, "\"%s\": {\n", key);
   jprintf_(jstate, "  \"fill\": %lu,\n", ht->ht_fill);
   jprintf_(jstate, "  \"size\": %lu,\n", ht->ht_size);
-  jprintf_(jstate, "  \"load_percent\": %.0f,\n",  100.0 * (double)ht->ht_fill / (double)ht->ht_size);
+  jprintf_(jstate, "  \"load_percent\": %.0f,\n",
+           100.0 * (double)ht->ht_fill / (double)ht->ht_size);
   jprintf_(jstate, "  \"rehash\": %u,\n", ht->ht_rehashes);
   jprintf_(jstate, "  \"lookups\": %lu,\n", ht->ht_lookups);
   jprintf_(jstate, "  \"collisions\": %lu,\n", ht->ht_collisions);
-  jprintf_(jstate, "  \"collision_percent\": %.0f\n\n",
-           ht->ht_lookups,
+  jprintf_(jstate, "  \"collision_percent\": %.0f\n\n", ht->ht_lookups,
            (ht->ht_lookups
                 ? (100.0 * (double)ht->ht_collisions / (double)ht->ht_lookups)
                 : 0));
@@ -276,13 +289,8 @@ static void jprint_variable(const void *item, void *arg) {
   }
 
   if (state) {
-    /* is first
-     * variable in
-     * a sequence
-     * so don't
-     * print a
-     * preceeding
-     * comma */
+    /* is first variable in a sequence
+     * so don't print a preceeding comma */
     if (state->is_first) {
       state->is_first = 0;
     } else {
@@ -296,8 +304,7 @@ static void jprint_variable(const void *item, void *arg) {
     jprintf_(jstate, "  \"source\": \"%s\",\n  \"line\": %lu,\n",
              v->fileinfo.filenm, v->fileinfo.lineno + v->fileinfo.offset);
 
-  /* Is this a
-   * 'define'?  */
+  /* Is this a 'define'?  */
   if (v->recursive && strchr(v->value, '\n') != 0) {
     jprintf_(jstate, "  \"define\": \"");
     print_escaped_string(v->value);
@@ -325,14 +332,9 @@ static void jprint_noauto_variable(const void *item, void *arg) {
     jprint_variable(item, arg);
 }
 
-/* Print all the
-   variables in SET.
-   PREFIX is printed
-   before the actual
-   variable
-   definitions
-   (everything else
-   is comments).  */
+/* Print all the variables in SET.  PREFIX is printed
+   before the actual variable definitions (everything
+   else is comments).  */
 
 void jprint_variable_set(const char *key, struct variable_set *set, int pauto,
                          int is_last) {
@@ -346,21 +348,17 @@ void jprint_variable_set(const char *key, struct variable_set *set, int pauto,
   jprintf_(jstate, "  \"%s\": {\n", key);
   hash_map_arg(&set->table, (pauto ? jprint_auto_variable : jprint_variable),
                (void *)&vstate);
-  /* jprint_hash_stats
-   * ("hash_table_stats",
-   * &set->table,
-   * 1); */
   jprintf_(jstate, "}%s\n", is_last ? "" : ",");
 }
 
-/* Print the data
- * base of
- * variables.  */
+/* Print the database of variables.  */
 
 void jprint_variable_data_base(int is_last) {
   jprintf_(jstate, "\"variables\": {\n");
 
   jprint_variable_set("global", &global_variable_set, 0, 0);
+  jprint_hash_stats("global_variable_hash_stats", &(global_variable_set.table),
+                    0);
 
   jprintf_(jstate, "\"pattern_specific_variables\" : {\n");
 
@@ -387,9 +385,7 @@ void jprint_variable_data_base(int is_last) {
   }
 }
 
-/* Print all the
- * local variables
- * of FILE.  */
+/* Print all the local variables of FILE.  */
 
 void jprint_file_variables(const char *key, const struct file *file,
                            int is_last) {
@@ -497,13 +493,8 @@ void jprint_file(const void *item, void *arg) {
     return;
 
   if (state) {
-    /* is first
-     * variable in
-     * a sequence
-     * so don't
-     * print a
-     * preceeding
-     * comma */
+    /* is first variable in a sequence so don't print a
+     * preceeding comma */
     if (state->is_first) {
       state->is_first = 0;
     } else {
@@ -582,7 +573,6 @@ void jprint_file_data_base(int is_last) {
   hash_map_arg(get_files(), jprint_file, (void *)&state);
 
   jprintf_(&state, "\n}%s\n", is_last ? "" : ",");
-  /* jprint_hash_stats("hash_table_stats", * get_files(), * 0); */
 }
 
 void jprint_dir_data_base(int is_last) {
@@ -688,6 +678,7 @@ void jprint_dir_data_base(int is_last) {
   }
 }
 
+/* json for one implicit rule */
 void jprint_rule(struct rule *r) {
   jprintf_(jstate, "    { \n");
   if (r->_defn == NULL) {
@@ -704,13 +695,8 @@ void jprint_rule(struct rule *r) {
     if (r->terminal)
       jprintf_(jstate, "      \"terminal\" : true, \n");
 
-    /* print all
-     * normal
-     * dependencies;
-     * find
-     * first
-     * order-only
-     * dep.  */
+    /* print all normal dependencies; find first
+     order-only dep.  */
     jprintf_(jstate, "      \"deps\" : [\n");
 
     for (dep = r->deps; dep; dep = dep->next) {
@@ -733,12 +719,8 @@ void jprint_rule(struct rule *r) {
     }
     jprintf_(jstate, "\n       ],\n");
 
+    /* print order-only deps, if we have any.  */
     jprintf_(jstate, "\n      \"ood_deps\" : [\n");
-    /* print
-     * order-only
-     * deps, if
-     * we have
-     * any.  */
     is_first_dep = 1;
     for (; ood; ood = ood->next) {
       if (ood->ignore_mtime) {
@@ -766,14 +748,10 @@ void jprint_rule(struct rule *r) {
   jprintf_(jstate, "    } \n");
 }
 
+/* print out the implicit (pattern) rules database. */
 void jprint_rule_data_base(int is_last) {
   unsigned int rules, terminal;
   struct rule *r;
-  /* unsigned int
-   * num_pattern_rules
-   * =
-   * get_num_pattern_rules();
-   */
 
   jprintf_(jstate, "\n\"rules\": {");
   jprintf_(jstate, "\n  \"implicit_rules\": [\n");
@@ -806,14 +784,12 @@ void jprint_rule_data_base(int is_last) {
   }
 }
 
-  /* not  implemented  yet */
-  /* jprintf_(jstate, "\n\"vpath\": []%s\n", is_last ? "" : ","); */
-
+/* Print the list of vpaths and the general_vpath */
 void jprint_vpath_data_base(int is_last) {
   unsigned int nvpaths;
   struct vpath *v;
 
-  jprintf_(jstate, "\n\"vpath\": {\n\"paths\": {"); 
+  jprintf_(jstate, "\n\"vpath\": {\n\"paths\": {");
 
   nvpaths = 0;
   for (v = vpaths; v != 0; v = v->next) {
@@ -822,7 +798,7 @@ void jprint_vpath_data_base(int is_last) {
     jprintf_(jstate, "\"%s\": [", v->pattern);
     for (i = 0; v->searchpath[i] != 0; ++i) {
       jprintf_(jstate, "\"%s\"", v->searchpath[i]);
-      if (v->searchpath[i+1]) {
+      if (v->searchpath[i + 1]) {
         jprintf_(jstate, ", ");
       }
     }
@@ -841,78 +817,66 @@ void jprint_vpath_data_base(int is_last) {
     unsigned int i;
     for (i = 0; path[i] != 0; ++i) {
       jprintf_(jstate, "\"%s\"", path[i]);
-      if (path[i+1]) {
+      if (path[i + 1]) {
         jprintf_(jstate, ", ");
       }
     }
   }
-  jprintf_(jstate, "]\n}%s\n", is_last ? "" : ","); 
+  jprintf_(jstate, "]\n}%s\n", is_last ? "" : ",");
 }
-
 
 /* Generate some stats output.  */
 
-void
-jstrcache_print_stats (int is_last)
-{
-    unsigned long numbuffs, fullbuffs;
-    unsigned long totfree, maxfree, minfree;
-    unsigned long total_strings, total_size;
-    unsigned long end, count, bufsize, total_adds;
-  
-    strcache_get_stats (
-        &numbuffs, 
-        &fullbuffs,
-        &totfree,
-        &maxfree,
-        &minfree,
-        &total_strings,
-        &total_size,
-        &end,
-        &count,
-        &bufsize,
-        &total_adds
-        );
+void jstrcache_print_stats(int is_last) {
+  unsigned long numbuffs, fullbuffs;
+  unsigned long totfree, maxfree, minfree;
+  unsigned long total_strings, total_size;
+  unsigned long end, count, bufsize, total_adds;
 
-    jprintf_ (jstate, "\"strcachestats\": {\n");
-    jprintf_ (jstate, "\"buffers\": {\n");
-    jprint_unsigned_long("count", numbuffs+1, 0);
-    jprint_unsigned_long("full", fullbuffs, 0);
-    jprint_unsigned_long("total_strings", total_strings, 0);
-    jprint_unsigned_long("total_size", total_size, 0);
-    jprint_unsigned_long("average_size", (total_size / total_strings), 1);
-    jprintf_ (jstate, "},\n");
-    
-    jprintf_ (jstate, "\"current_buffer\": {\n");
-    jprint_unsigned_long("bufsize", bufsize, 0);
-    jprint_unsigned_long("used", end, 0);
-    jprint_unsigned_long("count", count, 0);
-    jprint_unsigned_long("average", (unsigned int) (end / count), 1);
-    jprintf_ (jstate, "},\n");
-    
-    if (numbuffs)
-    {
-        /* Show information about non-current buffers. */
-        unsigned long sz = total_size - end;
-        unsigned long cnt = total_strings - count;
-        unsigned long avgfree = (totfree / numbuffs);
-    
-        jprintf_ (jstate, "  \"other_buffers\": {\n");
-        jprint_unsigned_long("size", sz, 0);
-        jprint_unsigned_long("count", cnt, 0);
-        jprint_unsigned_long("average", sz / cnt, 0);
-    
-        jprint_unsigned_long("totfree", totfree, 0);
-        jprint_unsigned_long("maxfree", maxfree, 0);
-        jprint_unsigned_long("minfree", minfree, 0);
-        jprint_unsigned_long("avgfree", avgfree, 1);
-        jprintf_ (jstate, "  },\n");
-    }
-    
-    jprintf_ (jstate, "  \"performance\": {\n");
-    jprint_unsigned_long("total_adds", total_adds, 0);
-    jprint_unsigned_long("hit_rate", (long unsigned)(100.0 * (total_adds - total_strings) / total_adds), 1);
-    jprintf_ (jstate, "  },\n");
-    jprint_hash_stats("hashtable", &strings, 1);
-    jprintf_ (jstate, "}%s\n", is_last ? "" : ",");
+  strcache_get_stats(&numbuffs, &fullbuffs, &totfree, &maxfree, &minfree,
+                     &total_strings, &total_size, &end, &count, &bufsize,
+                     &total_adds);
+
+  jprintf_(jstate, "\"strcachestats\": {\n");
+  jprintf_(jstate, "\"buffers\": {\n");
+  jprint_unsigned_long("count", numbuffs + 1, 0);
+  jprint_unsigned_long("full", fullbuffs, 0);
+  jprint_unsigned_long("total_strings", total_strings, 0);
+  jprint_unsigned_long("total_size", total_size, 0);
+  jprint_unsigned_long("average_size", (total_size / total_strings), 1);
+  jprintf_(jstate, "},\n");
+
+  jprintf_(jstate, "\"current_buffer\": {\n");
+  jprint_unsigned_long("bufsize", bufsize, 0);
+  jprint_unsigned_long("used", end, 0);
+  jprint_unsigned_long("count", count, 0);
+  jprint_unsigned_long("average", (unsigned int)(end / count), 1);
+  jprintf_(jstate, "},\n");
+
+  if (numbuffs) {
+    /* Show information about non-current buffers. */
+    unsigned long sz = total_size - end;
+    unsigned long cnt = total_strings - count;
+    unsigned long avgfree = (totfree / numbuffs);
+
+    jprintf_(jstate, "  \"other_buffers\": {\n");
+    jprint_unsigned_long("size", sz, 0);
+    jprint_unsigned_long("count", cnt, 0);
+    jprint_unsigned_long("average", sz / cnt, 0);
+
+    jprint_unsigned_long("totfree", totfree, 0);
+    jprint_unsigned_long("maxfree", maxfree, 0);
+    jprint_unsigned_long("minfree", minfree, 0);
+    jprint_unsigned_long("avgfree", avgfree, 1);
+    jprintf_(jstate, "  },\n");
+  }
+
+  jprintf_(jstate, "  \"performance\": {\n");
+  jprint_unsigned_long("total_adds", total_adds, 0);
+  jprint_unsigned_long(
+      "hit_rate",
+      (long unsigned)(100.0 * (total_adds - total_strings) / total_adds), 1);
+  jprintf_(jstate, "  },\n");
+  jprint_hash_stats("hashtable", &strings, 1);
+  jprintf_(jstate, "}%s\n", is_last ? "" : ",");
 }
