@@ -31,6 +31,7 @@ with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "rule.h"
 #include "variable.h"
 #include "vpath.h"
+#include "strcache.h"
 
 #include "jprint.h"
 #include <assert.h>
@@ -225,12 +226,15 @@ void jprint_enum(const char *key, unsigned int value, int is_last) {
 }
 
 /* hash table stats */
-void hash_jprint_stats(const char *key, struct hash_table *ht, int is_last) {
+void jprint_hash_stats(const char *key, struct hash_table *ht, int is_last) {
   jprintf_(jstate, "\"%s\": {\n", key);
-  jprintf_(jstate, "  \"load\": \"%lu/%lu=%.0f%%\",\n", ht->ht_fill,
-           ht->ht_size, 100.0 * (double)ht->ht_fill / (double)ht->ht_size);
+  jprintf_(jstate, "  \"fill\": %lu,\n", ht->ht_fill);
+  jprintf_(jstate, "  \"size\": %lu,\n", ht->ht_size);
+  jprintf_(jstate, "  \"load_percent\": %.0f,\n",  100.0 * (double)ht->ht_fill / (double)ht->ht_size);
   jprintf_(jstate, "  \"rehash\": %u,\n", ht->ht_rehashes);
-  jprintf_(jstate, "  \"collisions\": \"%lu/%lu=%.0f%%\"\n", ht->ht_collisions,
+  jprintf_(jstate, "  \"lookups\": %lu,\n", ht->ht_lookups);
+  jprintf_(jstate, "  \"collisions\": %lu,\n", ht->ht_collisions);
+  jprintf_(jstate, "  \"collision_percent\": %.0f\n\n",
            ht->ht_lookups,
            (ht->ht_lookups
                 ? (100.0 * (double)ht->ht_collisions / (double)ht->ht_lookups)
@@ -342,7 +346,7 @@ void jprint_variable_set(const char *key, struct variable_set *set, int pauto,
   jprintf_(jstate, "  \"%s\": {\n", key);
   hash_map_arg(&set->table, (pauto ? jprint_auto_variable : jprint_variable),
                (void *)&vstate);
-  /* hash_jprint_stats
+  /* jprint_hash_stats
    * ("hash_table_stats",
    * &set->table,
    * 1); */
@@ -578,7 +582,7 @@ void jprint_file_data_base(int is_last) {
   hash_map_arg(get_files(), jprint_file, (void *)&state);
 
   jprintf_(&state, "\n}%s\n", is_last ? "" : ",");
-  /* hash_jprint_stats("hash_table_stats", * get_files(), * 0); */
+  /* jprint_hash_stats("hash_table_stats", * get_files(), * 0); */
 }
 
 void jprint_dir_data_base(int is_last) {
@@ -908,6 +912,7 @@ jstrcache_print_stats (int is_last)
     jprintf_ (jstate, "  \"performance\": {\n");
     jprint_unsigned_long("total_adds", total_adds, 0);
     jprint_unsigned_long("hit_rate", (long unsigned)(100.0 * (total_adds - total_strings) / total_adds), 1);
-    jprintf_ (jstate, "  }\n");
+    jprintf_ (jstate, "  },\n");
+    jprint_hash_stats("hashtable", &strings, 1);
     jprintf_ (jstate, "}%s\n", is_last ? "" : ",");
 }

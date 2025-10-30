@@ -175,7 +175,7 @@ str_hash_cmp (const void *x, const void *y)
   return_ISTRING_COMPARE ((const char *) x, (const char *) y);
 }
 
-static struct hash_table strings;
+struct hash_table strings;
 static unsigned long total_adds = 0;
 
 static const char *
