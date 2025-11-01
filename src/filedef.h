@@ -13,7 +13,8 @@ A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program.  If not, see <https://www.gnu.org/licenses/>.  */
-
+#ifndef _FILEDEF_H_
+#define _FILEDEF_H_
 
 /* Structure that represents the info on one file
    that the makefile says how to make.
@@ -229,3 +230,5 @@ FILE_TIMESTAMP f_mtime (struct file *file, int search);
 /* Have we snapped deps yet?  */
 extern int snapped_deps;
 struct hash_table *get_files(void);
+
+#endif

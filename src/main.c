@@ -3917,8 +3917,8 @@ die (int status)
             filename_base = "makefile";
         }
 
-	printf("Writing database to json file");
 	snprintf(jsonfilename, GET_PATH_MAX-1, "%s-%d.json", filename_base, (int)getpid());
+	printf("Writing database to json file: %s\n", jsonfilename);
         json_file = jopen(jsonfilename);
 	if (json_file) {
             print_data_base_json();
