@@ -3025,7 +3025,7 @@ tilde_expand (const char *name)
   else
     {
       struct passwd *pwent;
-      char *userend = strchr (name + 1, '/');
+      char *userend = (char *)strchr (name + 1, '/');
       if (userend != 0)
         *userend = '\0';
       pwent = getpwnam (name + 1);

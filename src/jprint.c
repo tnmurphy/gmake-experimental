@@ -208,7 +208,8 @@ void jprint_bool(const char *key, int value, int is_last) {
 
 void jprint_pointer(const char *key, const void *value, int is_last) {
   if (value) {
-    jprintf_(jstate, "  \"%s\": %p%s\n", key, value, is_last ? "" : ",");
+    /* needs quotes as it prints in hex */
+    jprintf_(jstate, "  \"%s\": \"%p\"%s\n", key, value, is_last ? "" : ",");
   }
 }
 
@@ -531,7 +532,9 @@ void jprint_file(const void *item, void *arg) {
   if (f->parent) {
     jprint_string("parent", f->parent->name, 0);
   }
-  jprint_pointer("double_colon", (const void *)f->double_colon, 0);
+  if ((const void *)f->double_colon) {
+      jprint_string("double_colon", (const void *)f->double_colon->name, 0);
+  }
   jprint_unsigned_int("last_mtime", f->last_mtime, 0);
   jprint_unsigned_int("mtime_before_update", f->mtime_before_update, 0);
   jprint_unsigned_int("considered", f->considered, 0);
