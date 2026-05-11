@@ -3823,7 +3823,9 @@ print_data_base_json (void)
   
   v = lookup_variable (STRING_SIZE_TUPLE ("MAKEFILE_LIST"));
   jprintf("{\n\"");
-  print_escaped_string(v->value);
+  if (v) {
+  	print_escaped_string(v->value);
+  }
   jprintf("\" :{\n");
   jprint_variable_data_base (0);
   jprint_dir_data_base (0);
