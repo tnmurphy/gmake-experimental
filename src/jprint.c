@@ -105,8 +105,11 @@ int jappend_to_index(const char *index_filename, const char *jsonfilename) {
       close(fd);
       return -1;
     }
+
     // Write a newline
-    write(fd, "\n", 1);
+    if (write(fd, "\n", 1) == -1) {
+      perror("write newline");
+    }
 
     // Release the lock and close the file
     flock(fd, LOCK_UN);
@@ -670,9 +673,12 @@ void jprint_dir_data_base(int is_last) {
     }
   }
 
+  if (print_separator) {
+        jprintf_(jstate, ",\n");
+  }
   jprintf_(
       jstate,
-      ",\n\"\" :{\"files\":%u, \"impossibilities\":%u, \"directories\":%lu}",
+      "\"\" :{\"files\":%u, \"impossibilities\":%u, \"directories\":%lu}",
       files, impossible, directories.ht_fill);
   if (is_last) {
     jprintf_(jstate, "\n    }\n");
