@@ -286,14 +286,14 @@ strcache_get_stats (
 
   *total_strings_ = total_strings;
   *total_size_ = total_size;
-  *end = strcache->end;
-  *count = strcache->count;
   *bufsize = (sc_buflen_t)BUFSIZE;
   *total_adds_ = total_adds;
 
   if (! strcache) {
       return 0;
   }
+  *end = strcache->end;
+  *count = strcache->count;
 
   /* Count the first buffer separately since it's not full.  */
   for (sp = strcache->next; sp != NULL; sp = sp->next)

@@ -818,7 +818,7 @@ void jprint_vpath_data_base(int is_last) {
   }
   jprintf_(jstate, "},\n");
 
-  jprintf_(jstate, "\"vpaths\" : %d, \"nvpaths\": %d \n");
+  jprintf_(jstate, "\"nvpaths\": %d, \n", nvpaths);
 
   jprintf_(jstate, ", \"general_vpath\": [\n");
   if (general_vpath != 0) {
