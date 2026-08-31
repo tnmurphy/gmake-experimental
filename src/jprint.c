@@ -820,7 +820,7 @@ void jprint_vpath_data_base(int is_last) {
 
   jprintf_(jstate, "\"nvpaths\": %d, \n", nvpaths);
 
-  jprintf_(jstate, ", \"general_vpath\": [\n");
+  jprintf_(jstate, "\"general_vpath\": [\n");
   if (general_vpath != 0) {
     const char **path = general_vpath->searchpath;
     unsigned int i;
