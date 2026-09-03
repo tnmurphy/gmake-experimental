@@ -17,6 +17,7 @@ this program.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "makeint.h"
 
 #include <assert.h>
+#include <unistd.h>
 #if MK_OS_W32
 # include <windows.h>
 # include <io.h>
@@ -3909,26 +3910,37 @@ die (int status)
       if (print_data_base_flag)
         print_data_base ();
       else if (print_data_base_json_flag) {
-        char jsonfilename[GET_PATH_MAX];
-        char indexfilename[GET_PATH_MAX];
+        char jsonbuf[GET_PATH_MAX];
         FILE *json_file;
         const char *filename_base = (char *)0;
+        const char *indexfilename = (char *)0;
+        char *jsonfilename = (char *)0;
+       
  
         filename_base = getenv ("MAKE_JSON_BASE");
         if (!filename_base) {
-            filename_base = "makefile";
+          filename_base = "makefile";
         }
-
-	snprintf(jsonfilename, GET_PATH_MAX-1, "%s-%d.json", filename_base, (int)getpid());
-	printf("Writing database to json file: %s\n", jsonfilename);
-        json_file = jopen(jsonfilename);
-	if (json_file) {
+        jsonfilename = getcwd(jsonbuf, GET_PATH_MAX);
+        if (jsonfilename) {
+          int jflen = strlen(jsonfilename);
+          char *dirpos = jsonfilename + jflen;
+          *dirpos++ = '/';  /*  is this OK? hmm. */
+          snprintf(dirpos, GET_PATH_MAX-1-jflen, "%s-%d.json", filename_base, (int)getpid());
+          indexfilename = getenv ("MAKE_JSON_INDEX");
+          printf("Writing database to json file: %s\n", jsonfilename);
+          json_file = jopen(jsonfilename);
+          if (json_file) {
             print_data_base_json();
-	    snprintf(indexfilename, GET_PATH_MAX-1, "%s.idx", filename_base);
-            jappend_to_index(indexfilename, jsonfilename);
-	} else {
+            if (indexfilename) {
+                jappend_to_index(indexfilename, jsonfilename);
+            }
+          } else {
             fprintf(stderr, "file open returned %d", errno);
-	}
+   	  }
+        } else {
+            fprintf(stderr, "Unable to fit CWD into buffer - no json output possible.");
+   	}
       }
 
       if (verify_flag)
