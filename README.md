@@ -1,11 +1,12 @@
-# gmake-experimental
-This is the jprint branch of gmake-experimental which offers a way to dump make's internal database to a json file. GNU Make is the work of many authors, listed in the AUTHORS file but this minoir modification has initially been made by myself, Timothy Murphy <tnmurphy@gmail.com> and falls under the same license as GNU make itself.
+# jprint feature for parsing GNU Makefiles
+This is the jprint branch of gmake-experimental which offers a way to parse makefiles reliably by dumping make's internal database to a json file. GNU Make is the work of many authors, listed in the AUTHORS file but this minor modification has initially been made by myself, Timothy Murphy <tnmurphy@gmail.com> and falls under the same license as GNU make itself.
 
 I've often wanted to extract information from a large build in some way that's more reliable than grep. The GNU make (--print-data-base) option has been a very useful way to see what the complicated makefiles I was working on finally evaluated to. The negative aspect is that it is still a makefile and still has to be parsed.  
 
 Even when using AI to analyse large builds the AI will tend to go into a cycle of trying out regexps to extract information, discovering that they don't work and then starting again.
 
-This branch implements an analog of the print-database feature with output in JSON.  Now it should be trivial to get a list of targets of some particular type - even with a tool like "jq".
+## Parseresult files
+This branch implements an analog of the print-database feature with output in JSON.  Now it should be trivial to get a list of targets of some particular type - even with a tool like "jq".  This document refers to the JSON output as a  "parseresult" and it is written out to "parseresult files."
 
 Now a human or AI has a standardised way to extract information from makefiles, minus the shonky regexps.
 
