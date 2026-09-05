@@ -91,6 +91,7 @@ The index file specified in MAKE_JSON_INDEX will be appended to as makefiles get
       "src/default.o": {
         "hname": "src/default.o",
         "vpath": "",
+        "deps": [
           "src/default.c",
           "/usr/include/stdc-predef.h",
           "src/makeint.h",
