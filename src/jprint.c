@@ -76,6 +76,10 @@ int jappend_to_index(const char *index_filename, const char *jsonfilename) {
   int retry_delay_ms = 100;
   ssize_t written = 0;
 
+  if (!index_filename) {
+    return -1;
+  }
+
   while (retries-- > 0) {
     fd = open(index_filename, O_WRONLY | O_APPEND | O_CREAT, 0644);
     if (fd == -1) {

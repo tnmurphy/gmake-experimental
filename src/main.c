@@ -3910,22 +3910,33 @@ die (int status)
       if (print_data_base_flag)
         print_data_base ();
       else if (print_data_base_json_flag) {
-        char jsonbuf[GET_PATH_MAX];
+        char namebuf[GET_PATH_MAX];
         FILE *json_file;
         const char *filename_base = (char *)0;
         const char *indexfilename = (char *)0;
         char *jsonfilename = (char *)0;
+        char *dirpos = (char *)namebuf;
+        int jflen = 0;
        
  
         filename_base = getenv ("MAKE_JSON_BASE");
         if (!filename_base) {
           filename_base = "makefile";
         }
-        jsonfilename = getcwd(jsonbuf, GET_PATH_MAX);
+        /* prefix with the CWD if it's not absolute. This is because
+           the index needs to have absolute paths in it to be
+           correct.
+        */
+        if (filename_base[0]  != '/') {
+            jsonfilename = getcwd(namebuf, GET_PATH_MAX);
+            jflen = strlen(jsonfilename);
+            dirpos = jsonfilename + jflen;
+            *dirpos++ = '/';  /*  is this OK? hmm. */
+        } else {
+            jsonfilename = namebuf;
+            jsonfilename[0] = '\0';
+        }
         if (jsonfilename) {
-          int jflen = strlen(jsonfilename);
-          char *dirpos = jsonfilename + jflen;
-          *dirpos++ = '/';  /*  is this OK? hmm. */
           snprintf(dirpos, GET_PATH_MAX-1-jflen, "%s-%d.json", filename_base, (int)getpid());
           indexfilename = getenv ("MAKE_JSON_INDEX");
           printf("Writing database to json file: %s\n", jsonfilename);
