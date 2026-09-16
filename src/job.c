@@ -18,6 +18,8 @@ this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include <assert.h>
 #include <string.h>
+#include <sys/time.h>
+#include <sys/types.h>
 
 /* Default shell to use.  */
 #if MK_OS_W32
@@ -606,6 +608,72 @@ child_handler (int sig UNUSED)
 #endif
 }
 
+
+#define MAX_NOTIONALCPUS 512 
+
+int notionalcpu_max = 0;
+int notionalcpu_last_free = -1;
+int notionalcpus[MAX_NOTIONALCPUS];
+
+/* assign a notional CPU to a rule that make is going to run. */
+int acquire_notionalcpu(void)
+{
+    int i;
+
+    if (notionalcpu_last_free != -1) {
+        i = notionalcpu_last_free;
+        notionalcpus[i] = 1;
+        notionalcpu_last_free = -1;
+        return i;
+    }
+
+    for (i = 0; i < notionalcpu_max; i++) {
+        if (notionalcpus[i] == 0) {
+            notionalcpus[i] = 1;
+            return i;
+        }
+    }
+
+    notionalcpus[i] = 1;
+    notionalcpu_max++;
+
+    return i;
+}
+
+void release_notionalcpu(int res)
+{
+    notionalcpu_last_free = res;
+    notionalcpus[res] = 0;
+}
+
+/* Rule build times are logged to a filename based on a user 
+supplied environment variable and the make process' PID since
+make can be invoked multiple times */
+FILE *profile_log = NULL;
+int init_profile(void)
+{
+    char profile_filename[1024];
+    const char *profile_base;
+
+    profile_base = getenv("MAKE_PROFILE_BASE");
+
+    if (profile_base == NULL) {
+        profile_base = "make_profile";
+    }
+
+    snprintf(profile_filename, sizeof(profile_filename), "%s_%d.mprof", profile_base,
+             getpid());
+
+    profile_log = fopen(profile_filename, "w+");
+
+    /* if we couldn't open the log then turn off profiling */ 
+    if (profile_log == NULL) {
+        profile_targets_flag = 0;
+    }
+
+    return profile_targets_flag;
+}
+
 extern pid_t shell_function_pid;
 
 /* Reap all dead children, storing the returned status and the new command
@@ -1034,6 +1102,18 @@ reap_children (int block, int err)
 
       /* Synchronize any remaining parallel output.  */
       output_dump (&c->output);
+
+      if (profile_targets_flag) {
+        release_notionalcpu(c->notionalcpu);
+        c->end_time = get_time_in_seconds();    /* Find out how long it took */
+        if (!profile_log) {
+            init_profile();
+        }
+
+        fprintf(profile_log, "{ \"duration\": %F, \"notionalcpu\": %u, \"target\": \"%s\"},\n",
+                c->end_time - c->start_time, c->notionalcpu, c->file->name);
+        fflush(profile_log);
+      }
 
       /* At this point c->file->update_status is success or failed.  But
          c->file->command_state is still cs_running if all the commands
@@ -1674,6 +1754,22 @@ new_job (struct file *file)
 
   c->file = file;
   c->sh_batch_file = NULL;
+
+  /* The idea of a notional CPU is to try to estimate how busy the build is
+     and whether processor cores are going idle.  We couldn't really force
+     the build rules to run on one particular core to make this a reality
+     but we can pretend to do so and that is somewhat better than nothing.
+     if we then display this information in a diagram it should be possible
+     to see long periods of non-parallelism which are obviously not making 
+     maximal use of the machine and we can then try to redesign the build to
+     address this.
+  */
+
+  if (profile_targets_flag) {
+      c->notionalcpu = acquire_notionalcpu(); 
+      c->start_time = get_time_in_seconds();
+  }
+  
 
   /* Cache dontcare flag because file->dontcare can be changed once we
      return. Check dontcare inheritance mechanism for details.  */
@@ -3761,3 +3857,15 @@ dup2 (int old, int new)
 #if MK_OS_VMS
 #include "vmsjobs.c"
 #endif
+
+
+double get_time_in_seconds(void)
+{
+    struct timeval current_time;
+    double seconds;
+    gettimeofday(&current_time, NULL);
+    seconds = (double)current_time.tv_sec + ((double)current_time .tv_usec) / 1000000.0L;
+    return seconds;
+}
+
+

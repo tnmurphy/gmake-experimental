@@ -321,6 +321,10 @@ unsigned long command_count = 1;
 
 static int stdin_offset = -1;
 
+/* Record the duration of the rule that built each target that has been 
+   updated.d Record it in a file set in the environment by MAKE_PROFILE_BASE. */
+int profile_targets_flag = 0;
+
 
 /* The usage output.  We write it this way to make life easier for the
    translators, especially those trying to translate to right-to-left
@@ -377,6 +381,9 @@ static const char *const usage[] =
                               Synchronize output of parallel jobs by TYPE.\n"),
     N_("\
   -p, --print-data-base       Print make's internal database.\n"),
+    N_("\
+  --profile-targets           Time each updated target and write timing information \
+                              to file based on MAKE_JSON_BASE.\n"),
     N_("\
   -q, --question              Run no recipe; exit status says if up to date.\n"),
     N_("\
@@ -515,6 +522,7 @@ static struct command_switch switches[] =
     { CHAR_MAX+12, string, &jobserver_style, 1, 0, 0, 0, 0, 0, "jobserver-style", 0 },
     { WARN_OPT, strlist, &warn_flags, 1, 1, 0, 0, "warn", NULL, "warn", NULL },
     { CHAR_MAX+14, flag, &print_targets_flag, 1, 1, 0, 0, 0, 0, "print-targets", 0 },
+    { CHAR_MAX+15, flag, &profile_targets_flag, 1, 1, 0, 0, 0, 0, "profile-targets", 0 },
     { 0, 0, NULL, 0, 0, 0, 0, NULL, NULL, NULL, NULL }
   };
 
@@ -755,7 +763,7 @@ close_stdout (void)
 }
 
 static const char *
-expand_command_line_file (const char *name)
+expand_command_line_file (char *name)
 {
   const char *cp;
   char *expanded = 0;

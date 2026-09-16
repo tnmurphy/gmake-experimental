@@ -2976,7 +2976,7 @@ construct_include_path (const char **arg_dirs)
    Return a newly malloc'd string or 0.  */
 
 char *
-tilde_expand (const char *name)
+tilde_expand (char *name)
 {
 #if !MK_OS_VMS
   if (name[1] == '/' || name[1] == '\0')

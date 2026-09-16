@@ -63,6 +63,9 @@ struct child
     unsigned int  recursive:1;  /* Nonzero for recursive command ('+' etc.)  */
     unsigned int  jobslot:1;    /* Nonzero if it's reserved a job slot.  */
     unsigned int  dontcare:1;   /* Saved dontcare flag.  */
+    unsigned int  notionalcpu;
+    double        start_time;
+    double        end_time;
   };
 
 extern struct child *children;
@@ -83,6 +86,8 @@ pid_t child_execute_job (struct childbase *child, int good_stdin, char **argv);
 pid_t exec_command (char **argv, char **envp);
 
 void unblock_all_sigs (void);
+
+double get_time_in_seconds (void);
 
 extern unsigned int job_slots_used;
 extern unsigned int jobserver_tokens;
