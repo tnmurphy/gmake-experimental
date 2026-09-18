@@ -661,7 +661,7 @@ int init_profile(void)
         profile_base = "make_profile";
     }
 
-    snprintf(profile_filename, sizeof(profile_filename), "%s_%d.mprof", profile_base,
+    snprintf(profile_filename, sizeof(profile_filename), "%s-%d.csv", profile_base,
              getpid());
 
     profile_log = fopen(profile_filename, "w+");
@@ -669,6 +669,8 @@ int init_profile(void)
     /* if we couldn't open the log then turn off profiling */ 
     if (profile_log == NULL) {
         profile_targets_flag = 0;
+    } else {
+        fprintf(profile_log, "\"seconds\", \"notional cpu\", \"file\"\n");
     }
 
     return profile_targets_flag;
@@ -1110,7 +1112,7 @@ reap_children (int block, int err)
             init_profile();
         }
 
-        fprintf(profile_log, "{ \"duration\": %F, \"notionalcpu\": %u, \"target\": \"%s\"},\n",
+        fprintf(profile_log, "%F, %u, \"%s\"\n",
                 c->end_time - c->start_time, c->notionalcpu, c->file->name);
         fflush(profile_log);
       }
