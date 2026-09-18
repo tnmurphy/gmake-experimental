@@ -95,7 +95,7 @@ void *parse_file_seq (char **stringp, size_t size,
                       int stopmap, const char *prefix, int flags);
 #endif
 
-char *tilde_expand (char *name);
+char *tilde_expand (const char *name);
 
 #ifndef NO_ARCHIVES
 struct nameseq *ar_glob (const char *arname, const char *member_pattern, size_t size);

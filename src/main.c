@@ -763,7 +763,7 @@ close_stdout (void)
 }
 
 static const char *
-expand_command_line_file (char *name)
+expand_command_line_file (const char *name)
 {
   const char *cp;
   char *expanded = 0;
