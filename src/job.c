@@ -670,7 +670,7 @@ int init_profile(void)
     if (profile_log == NULL) {
         profile_targets_flag = 0;
     } else {
-        fprintf(profile_log, "\"seconds\", \"notional cpu\", \"file\"\n");
+        fprintf(profile_log, "\"Start Time (s)\",\"Duration (s)\", \"Notional CPU\", \"File\"\n");
     }
 
     return profile_targets_flag;
@@ -1112,8 +1112,8 @@ reap_children (int block, int err)
             init_profile();
         }
 
-        fprintf(profile_log, "%F, %u, \"%s\"\n",
-                c->end_time - c->start_time, c->notionalcpu, c->file->name);
+        fprintf(profile_log, "%F %F, %u, \"%s\"\n",
+                c->start_time, c->end_time - c->start_time, c->notionalcpu, c->file->name);
         fflush(profile_log);
       }
 
