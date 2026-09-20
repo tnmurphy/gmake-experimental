@@ -1112,7 +1112,7 @@ reap_children (int block, int err)
             init_profile();
         }
 
-        fprintf(profile_log, "%F %F, %u, \"%s\"\n",
+        fprintf(profile_log, "%F, %F, %u, \"%s\"\n",
                 c->start_time, c->end_time - c->start_time, c->notionalcpu, c->file->name);
         fflush(profile_log);
       }
