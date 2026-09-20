@@ -2976,7 +2976,7 @@ construct_include_path (const char **arg_dirs)
    Return a newly malloc'd string or 0.  */
 
 char *
-tilde_expand (const char *name)
+tilde_expand (char *name)
 {
 #if !MK_OS_VMS
   if (name[1] == '/' || name[1] == '\0')
@@ -3025,31 +3025,25 @@ tilde_expand (const char *name)
   else
     {
       struct passwd *pwent;
-      char *namecopy = xstrdup(name);
-      char *userend = strchr (namecopy + 1, '/');
+      char *userend;
+      char *username = alloca(strlen(name));
 
+      strcpy(username, name+1);
+
+      userend = strchr (username, '/');
       if (userend != 0)
         *userend = '\0';
-      pwent = getpwnam (namecopy + 1);
+      pwent = getpwnam (username);
       if (pwent != 0)
         {
-          char *result = 0;
           if (userend == 0)
-            {
-            result =  xstrdup (pwent->pw_dir);
-            }
-          else
-            {
-            *userend = '/';
-            result =  xstrdup (concat (3, pwent->pw_dir, "/", userend + 1));
-            }
-          free(namecopy);
-          return result;
+            return xstrdup (pwent->pw_dir);
+
+          *userend = '/';
+          return xstrdup (concat (3, pwent->pw_dir, "/", userend + 1));
         }
       else if (userend != 0)
         *userend = '/';
-
-      free(namecopy);
     }
 # endif /* !MK_OS_W32 */
 #endif /* !MK_OS_VMS */
