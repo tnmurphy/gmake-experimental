@@ -3065,20 +3065,31 @@ tilde_expand (const char *name)
   else
     {
       struct passwd *pwent;
-      char *userend = strchr (name + 1, '/');
+      char *namecopy = xstrdup(name);
+      char *userend = strchr (namecopy + 1, '/');
+
       if (userend != 0)
         *userend = '\0';
-      pwent = getpwnam (name + 1);
+      pwent = getpwnam (namecopy + 1);
       if (pwent != 0)
         {
+          char *result = 0;
           if (userend == 0)
-            return xstrdup (pwent->pw_dir);
-
-          *userend = '/';
-          return xstrdup (concat (3, pwent->pw_dir, "/", userend + 1));
+            {
+            result =  xstrdup (pwent->pw_dir);
+            }
+          else
+            {
+            *userend = '/';
+            result =  xstrdup (concat (3, pwent->pw_dir, "/", userend + 1));
+            }
+          free(namecopy);
+          return result;
         }
       else if (userend != 0)
         *userend = '/';
+
+      free(namecopy);
     }
 # endif /* !MK_OS_W32 */
 #endif /* !MK_OS_VMS */
